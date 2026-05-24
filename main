@@ -146,7 +146,7 @@ local sNames = {
 	"AnonymousMode","fontFace","taggedBoothHop",
 	"helloResponce","botResponce","donateResponce",
 	"pingEveryone","pingAboveDono","antiBotServers","playerBlacklist",
-	"remoteControlUrl","autoEmote","emoteId","fpsLimit","disableRendering",
+	"remoteControlUrl","autoEmote","emoteId",
 	"statusWebhookBox","goalDiff","blacklistHop","resourcePreserver"
 }
 local sValues = {
@@ -918,6 +918,9 @@ local function activateResourcePreserver()
 			pcall(function() gui.DisplayOrder = 100 end)
 		end
 	end
+	-- Apply FPS cap (hardcoded to 5 for resource preserver)
+	pcall(function() setfpscap(5) end)
+
 	Fluent:Notify({ Title = "Resource Preserver", Content = "World cleared", Duration = 3 })
 end
 
@@ -937,18 +940,7 @@ Tabs.Resources:AddToggle("ResourcePreserver", {
 	end
 })
 
-Tabs.Resources:AddInput("FpsLimit", {
-	Title    = "FPS Limit",
-	Default  = tostring(safeNum(getgenv().settings.fpsLimit, 60)),
-	Numeric  = true,
-	Callback = function(v)
-		if tonumber(v) and tonumber(v) >= 5 then
-			getgenv().settings.fpsLimit = tonumber(v); saveSettings()
-			if setfpscap then pcall(function() setfpscap(tonumber(v)) end) end
-			if syn and syn.set_fps_cap then pcall(function() syn.set_fps_cap(tonumber(v)) end) end
-		end
-	end
-})
+
 
 -- SECTION: Notify + unlock + Booth tab
 Fluent:Notify({ Title = "Gru.lua", Content = "Loaded", Duration = 3 })
