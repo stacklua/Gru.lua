@@ -1066,7 +1066,7 @@ end
 
 raisedAtClaim = tonumber(newRaisedFormat.Value) or 0
 updateBoothText()
-Fluent:Notify({ Title = "Booth Claimed", Content = "Booth claimed", Duration = 3 })
+Fluent:Notify({ Title = "Booth Claimed", Content = "Farming has begun!", Duration = 3 })
 
 -- Status embed loop
 task.spawn(function()
