@@ -62,7 +62,7 @@ local emoteTrack      = nil
 local lastBoothFont   = ""
 local serverHistory   = {}
 local SERVER_HISTORY_TTL = 600
-local raisedAtClaim   = 0   -- newRaisedFormat.Value when booth was claimed
+local raisedAtClaim   = 0
 
 -- Font is always Arial
 
@@ -147,7 +147,7 @@ local sNames = {
 	"helloResponce","botResponce","donateResponce",
 	"pingEveryone","pingAboveDono","antiBotServers","playerBlacklist",
 	"remoteControlUrl","autoEmote","emoteId","fpsLimit","disableRendering",
-	"statusWebhookBox","goalDiff","blacklistHop"
+	"statusWebhookBox","goalDiff","blacklistHop","resourcePreserver"
 }
 local sValues = {
 	true, "", "FREE GRU!",
@@ -159,8 +159,8 @@ local sValues = {
 	{"hi","sup","help pls"}, {"no im not","im not a bot","i aint no bot"},
 	{"sorry i need money to help get me out of here","sorry i cant","sorry i need to escape jail"},
 	false, 1000, false, {},
-	"", true, "5230661597", 5, false,
-	"", 2000, false
+	"", true, "5230661597", 60, false,
+	"", 2000, false, false
 }
 
 if isfile and isfile("grudonate.txt") then
@@ -206,7 +206,6 @@ local function joinPipe(t)
 	return #tbl > 0 and table.concat(tbl, " | ") or ""
 end
 
--- Comma split/join for reply fields (no spaces required, e.g. "hi,hello,hey")
 local function splitCommaReplies(str)
 	local result = {}
 	for part in tostring(str or ""):gmatch("[^,]+") do
@@ -287,7 +286,6 @@ local function serverHop()
 				if not ok then return end
 				local ok2, body = pcall(function() return HS:JSONDecode(req.Body) end)
 				if ok2 and body and body.data then
-					-- Prune expired history entries
 					local now = os.time()
 					local pruned = {}
 					for _, entry in ipairs(serverHistory) do
@@ -296,10 +294,8 @@ local function serverHop()
 						end
 					end
 					serverHistory = pruned
-					-- Build set of recently visited job IDs
 					local recentIds = {}
 					for _, entry in ipairs(serverHistory) do recentIds[entry.jobId] = true end
-
 					local servers = {}
 					for _, s in pairs(body.data) do
 						if s.playing < 25 and s.id ~= game.JobId and s.playing > 12
@@ -307,7 +303,6 @@ local function serverHop()
 							table.insert(servers, s)
 						end
 					end
-					-- Fall back to any valid server if all are in history
 					if #servers == 0 then
 						for _, s in pairs(body.data) do
 							if s.playing < 25 and s.id ~= game.JobId and s.playing > 12 then
@@ -317,7 +312,6 @@ local function serverHop()
 					end
 					if #servers > 0 then
 						local chosen = servers[math.random(1, #servers)]
-						-- Record current server in history before leaving
 						table.insert(serverHistory, { jobId = game.JobId, time = os.time() })
 						getgenv().loadedRR = nil
 						pcall(function() TS:TeleportToPlaceInstance(PlaceId, chosen.id, P.LocalPlayer) end)
@@ -328,7 +322,7 @@ local function serverHop()
 	end
 end
 
-local HOP_INTERVAL = 4 * 60   -- always 4 minutes
+local HOP_INTERVAL = 4 * 60
 local nextHopTime  = nil
 
 local function hopSet()
@@ -347,7 +341,7 @@ end
 
 local function extendHopTimer()
 	if nextHopTime then
-		nextHopTime = nextHopTime + 60  -- push back 1 minute on donation
+		nextHopTime = nextHopTime + 60
 	end
 end
 
@@ -370,7 +364,6 @@ end
 
 local function playEmote()
 	local id = safeStr(getgenv().settings.emoteId)
-	-- Note: Roblox engine fires a sanitization warn internally — this is cosmetic only, animation still plays
 	if id == "" or id == "0" then return end
 	local char = Players.LocalPlayer.Character
 	if not char then return end
@@ -473,12 +466,11 @@ local function formatNumber(n)
 	else return tostring(n) end
 end
 
-local ALWAYS_GREEN = 2  -- pipes that are always green regardless of progress
+local ALWAYS_GREEN = 2
 local function buildProgressBar()
 	local currentRaw = tonumber(newRaisedFormat.Value) or 0
 	local goalDiff   = math.max(1, safeNum(getgenv().settings.goalDiff, 500))
 	local raised     = math.max(0, currentRaw - raisedAtClaim)
-	-- Reset cycle: once goal is hit, advance the baseline and start again
 	if raised >= goalDiff then
 		raisedAtClaim = raisedAtClaim + goalDiff
 		raised = math.max(0, currentRaw - raisedAtClaim)
@@ -506,7 +498,6 @@ end
 function updateBoothText()
 	local slot = unclaimed[1]
 	if not slot then return end
-	local currentRaw = tonumber(newRaisedFormat.Value) or 0
 	local text = buildProgressBar()
 	if #text > 250 then text = text:sub(1, 250) end
 	local boothUI = _boothlocation.BoothUI:FindFirstChild("BoothUI" .. tostring(slot))
@@ -540,7 +531,6 @@ end
 
 -- SECTION: Begging Loop
 local function begging()
-	-- Always wait the full delay before the first message
 	task.wait(safeNum(getgenv().settings.begDelay, 300))
 	while getgenv().settings.autoBeg do
 		local nearby = false
@@ -602,7 +592,6 @@ local function buildEmbed()
 	}
 end
 
--- Returns the status channel URL — does NOT fall back to donation webhook
 local function getStatusUrl()
 	local s = safeStr(getgenv().settings.statusWebhookBox):match("%S+")
 	if s and s ~= "" then return s end
@@ -707,8 +696,7 @@ Tabs.Booth:AddInput("CustomBoothText", {
 	end
 })
 
--- Font is always Arial, standing position always Left
-getgenv().settings.fontFace      = "Arial"
+getgenv().settings.fontFace         = "Arial"
 getgenv().settings.standingPosition = "Left"
 getgenv().settings.boothPosition    = -6
 
@@ -722,7 +710,6 @@ Tabs.Booth:AddInput("GoalDiff", {
 })
 
 -- ======================== EMOTE ========================
--- Anonymous mode always on
 getgenv().settings.AnonymousMode = true
 task.delay(5, function() Remotes.Event('SetAnonymousLive'):FireServer(true) end)
 
@@ -888,8 +875,6 @@ local platformStandConn       = nil
 local function activateResourcePreserver()
 	repeat task.wait(0.5) until bclaimed
 	task.wait(1)
-
-	-- Destroy everything in workspace except essentials
 	local charName = (Players.LocalPlayer.Character and Players.LocalPlayer.Character.Name) or ""
 	local keep = { "BoothInteractions", "MapUI", "Camera", "Terrain", charName }
 	local function shouldKeep(name)
@@ -897,21 +882,11 @@ local function activateResourcePreserver()
 		return false
 	end
 	for _, obj in ipairs(workspace:GetChildren()) do
-		if not shouldKeep(obj.Name) then
-			pcall(function() obj:Destroy() end)
-		end
+		if not shouldKeep(obj.Name) then pcall(function() obj:Destroy() end) end
 	end
-
-	-- Clear sky, atmosphere, etc from Lighting
 	local Lighting = game:GetService("Lighting")
-	for _, obj in ipairs(Lighting:GetChildren()) do
-		pcall(function() obj:Destroy() end)
-	end
-
-	-- Wipe terrain geometry
+	for _, obj in ipairs(Lighting:GetChildren()) do pcall(function() obj:Destroy() end) end
 	pcall(function() workspace.Terrain:Clear() end)
-
-	-- Create a baseplate under the character to stand on
 	pcall(function()
 		local char = Players.LocalPlayer.Character
 		local hrp  = char and char:FindFirstChild("HumanoidRootPart")
@@ -927,25 +902,22 @@ local function activateResourcePreserver()
 			plate.Parent      = workspace
 		end
 	end)
-
-	-- Blackout: cover all Roblox UI, leave Gru.lua on top
 	local gruBlackout = Instance.new("ScreenGui")
-	gruBlackout.Name          = "GruBlackout"
-	gruBlackout.DisplayOrder  = 50
-	gruBlackout.ResetOnSpawn  = false
+	gruBlackout.Name           = "GruBlackout"
+	gruBlackout.DisplayOrder   = 50
+	gruBlackout.ResetOnSpawn   = false
 	gruBlackout.IgnoreGuiInset = true
-	gruBlackout.Parent        = CoreGui
+	gruBlackout.Parent         = CoreGui
 	local bf = Instance.new("Frame")
-	bf.Size                   = UDim2.fromScale(1, 1)
-	bf.BackgroundColor3       = Color3.new(0, 0, 0)
-	bf.BorderSizePixel        = 0
-	bf.Parent                 = gruBlackout
+	bf.Size             = UDim2.fromScale(1, 1)
+	bf.BackgroundColor3 = Color3.new(0, 0, 0)
+	bf.BorderSizePixel  = 0
+	bf.Parent           = gruBlackout
 	for _, gui in ipairs(CoreGui:GetChildren()) do
 		if gui:IsA("ScreenGui") and gui.Name ~= "GruBlackout" and gui.Name ~= "RobloxGui" then
 			pcall(function() gui.DisplayOrder = 100 end)
 		end
 	end
-
 	Fluent:Notify({ Title = "Resource Preserver", Content = "World cleared", Duration = 3 })
 end
 
@@ -957,9 +929,10 @@ end
 
 Tabs.Resources:AddToggle("ResourcePreserver", {
 	Title    = "Resource Preserver",
-	Default  = false,
+	Default  = getgenv().settings.resourcePreserver or false,
 	Callback = function(v)
 		resourcePreserverActive = v
+		getgenv().settings.resourcePreserver = v; saveSettings()
 		if v then task.spawn(activateResourcePreserver) else deactivateResourcePreserver() end
 	end
 })
@@ -982,10 +955,10 @@ Fluent:Notify({ Title = "Gru.lua", Content = "Loaded", Duration = 3 })
 settingsLock = false
 Window:SelectTab(1)
 
--- Apply saved FPS limit on load
-if getgenv().settings.fpsLimit and getgenv().settings.fpsLimit >= 5 then
-	if setfpscap then pcall(function() setfpscap(getgenv().settings.fpsLimit) end) end
-	if syn and syn.set_fps_cap then pcall(function() syn.set_fps_cap(getgenv().settings.fpsLimit) end) end
+-- Auto-activate resource preserver if it was saved as on
+if getgenv().settings.resourcePreserver then
+	resourcePreserverActive = true
+	task.spawn(activateResourcePreserver)
 end
 
 -- SECTION: Find Unclaimed Booths
@@ -1011,10 +984,8 @@ local function findUnclaimed()
 	end
 end
 
--- Wait for booth UI owner data to populate before scanning
 task.wait(3)
 if not pcall(findUnclaimed) then serverHop() end
--- Retry once if nothing found
 if #unclaimed == 0 then
 	task.wait(3)
 	pcall(findUnclaimed)
@@ -1024,13 +995,13 @@ if not unclaimed[1] then setHopReason("No booths available"); serverHop(); retur
 
 -- SECTION: Walk To Booth
 getgenv().walkToBooth = function()
-	local bp = -6  -- always Left position
+	local bp = -6
 	local boothPos = boothCFrameForPosition(bp)
-	if not boothPos then warn("walkToBooth: no booth found"); return end
+	if not boothPos then return end
 	local hrp = Players.LocalPlayer.Character and Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
 	if not hrp then return end
 	pcall(function() workspace.Map.Decoration.Benches:Destroy() end)
-	local dist  = (hrp.Position - boothPos.Position).Magnitude
+	local dist = (hrp.Position - boothPos.Position).Magnitude
 	local t = twn(hrp, TweenInfo.new(math.max(dist / 32, 0.2), Enum.EasingStyle.Linear), { CFrame = boothPos })
 	t:Play(); t.Completed:Wait()
 	hrp.CFrame = facingBoothFront(hrp.Position)
@@ -1068,13 +1039,11 @@ raisedAtClaim = tonumber(newRaisedFormat.Value) or 0
 updateBoothText()
 Fluent:Notify({ Title = "Booth Claimed", Content = "Farming has begun!", Duration = 3 })
 
--- Status embed loop
 task.spawn(function()
 	postStatusEmbed()
 	while task.wait(30) do updateStatusEmbed() end
 end)
 
--- Auto text update loop
 task.spawn(function()
 	while task.wait(10) do updateBoothText() end
 end)
@@ -1160,7 +1129,7 @@ ReplicatedStorage.VFXObjects.CreateVfx.OnClientEvent:Connect(function(...)
 	local playerWhoDonated
 	sgoalR = sgoalR + (newRaisedFormat.Value - RaisedC)
 	local raised = don
-	extendHopTimer()  -- push hop back 1 minute on donation
+	extendHopTimer()
 
 	if getgenv().settings.webhookToggle and safeStr(getgenv().settings.webhookBox) ~= "" then
 		task.spawn(function()
@@ -1190,7 +1159,6 @@ task.spawn(function()
 		if bclaimed and unclaimed[1] then
 			local boothUI = _boothlocation.BoothUI:FindFirstChild("BoothUI" .. tostring(unclaimed[1]))
 			if boothUI and not string.find(boothUI.Details.Owner.Text, Players.LocalPlayer.DisplayName) then
-				warn("Booth taken, reclaiming...")
 				bclaimed = false
 				pcall(function() Remotes.Event("ClaimBooth"):InvokeServer(unclaimed[1]) end)
 				task.wait(1)
@@ -1274,9 +1242,7 @@ end)
 -- SECTION: Blacklist + Auto-Destroy Other Characters
 local function setupCharacterDestroy(player)
 	if player == Players.LocalPlayer then return end
-	if player.Character then
-		pcall(function() player.Character:Destroy() end)
-	end
+	if player.Character then pcall(function() player.Character:Destroy() end) end
 	player.CharacterAdded:Connect(function(char)
 		task.wait(0.1)
 		pcall(function() char:Destroy() end)
@@ -1291,8 +1257,6 @@ for _, player in next, Players:GetPlayers() do
 	checkBlacklist(player)
 	setupCharacterDestroy(player)
 end
-
--- SECTION: Server Hop Loop (handled by hopSet)
 
 -- SECTION: Reloader
 task.spawn(function()
