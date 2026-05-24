@@ -101,7 +101,7 @@ local httprequest     = (syn and syn.request) or http and http.request or http_r
 local httpservice     = HttpService
 
 if queueonteleport then
-	queueonteleport("loadstring(game:HttpGet('YOUR_GITHUB_RAW_URL_HERE'))()")
+	queueonteleport("loadstring(game:HttpGet('https://raw.githubusercontent.com/stacklua/Gru.lua/refs/heads/main/main'))()")
 end
 
 local positionX = (Players.LocalPlayer.Character or Players.LocalPlayer.CharacterAdded:Wait()):WaitForChild('HumanoidRootPart').Position
