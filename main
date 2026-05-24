@@ -513,7 +513,7 @@ function updateBoothText()
 	if not boothUI then return end
 	local signLabel = boothUI.Sign.TextLabel
 	if signLabel.Text == text then return end
-	if signLabel.Text:find("##") and nx >= 1 then setHopReason("Tagged booth") return serverHop() end
+	if signLabel.Text:find("#") then setHopReason("Tagged booth"); return serverHop() end
 	local payload = {
 		textFont          = Enum.Font.Arial,
 		richText          = true,
@@ -1060,8 +1060,8 @@ end
 hopSet()
 
 local _claimedUI = _boothlocation.BoothUI:FindFirstChild("BoothUI" .. tostring(unclaimed[1]))
-if _claimedUI and _claimedUI.Sign.TextLabel.Text:find("##") then
-	setHopReason("Tagged booth") serverHop(); return
+if _claimedUI and _claimedUI.Sign.TextLabel.Text:find("#") then
+	setHopReason("Tagged booth"); serverHop(); return
 end
 
 raisedAtClaim = tonumber(newRaisedFormat.Value) or 0
