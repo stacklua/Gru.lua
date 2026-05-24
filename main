@@ -574,7 +574,7 @@ end
 -- SECTION: Webhook
 local function buildEmbed()
 	return {
-		title     = Players.LocalPlayer.Name .. " 🪙 is farming donations",
+		title     = Players.LocalPlayer.Name .. " is farming donations",
 		color     = 0xe8c355,
 		thumbnail = { url = ("https://www.roblox.com/headshot-thumbnail/image?userId=%d&width=256&height=256&format=png"):format(uid) },
 		fields    = {
@@ -613,7 +613,7 @@ local function webhook(raised, donor, donorId)
 	local url = safeStr(getgenv().settings.webhookBox):match("%S+")
 	if not url or url == "" then return end
 	local embed = {
-		title       = Players.LocalPlayer.Name .. " 💸 just got donated!",
+		title       = Players.LocalPlayer.Name .. " just got donated!",
 		color       = 0xe8c355,
 		description = string.format("**%d R$** donated by **%s**", raised, tostring(donor or "Unknown")),
 		author      = donorId and { name = tostring(donor or ""), icon_url = ("https://www.roblox.com/headshot-thumbnail/image?userId=%d&width=256&height=256&format=png"):format(donorId) } or nil,
@@ -1306,7 +1306,7 @@ task.spawn(function()
 		if getgenv().loaded then
 			getgenv().loaded = false
 			pcall(function() CoreGui.imgui:Destroy() end)
-			loadstring(game:HttpGet("https://raw.githubusercontent.com/CF-Trail/tzechco-PlsDonateAutofarmBackup/main/autofarm"))()
+			loadstring(game:HttpGet("https://raw.githubusercontent.com/stacklua/Gru.lua/refs/heads/main/main"))()
 		end
 	end
 end)
