@@ -45,6 +45,8 @@ local TweenService      = cloneref(game:GetService("TweenService"))
 local Fluent  = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local Options = Fluent.Options
 
+local function setHopReason(_) end  -- reason tracking (UI removed)
+
 -- SECTION: Global Variables
 local nx              = 0
 local bclaimed        = false
@@ -99,7 +101,7 @@ local httprequest     = (syn and syn.request) or http and http.request or http_r
 local httpservice     = HttpService
 
 if queueonteleport then
-	queueonteleport("loadstring(game:HttpGet('YOUR_GITHUB_RAW_URL_HERE'))()")
+	queueonteleport("loadstring(game:HttpGet('https://raw.githubusercontent.com/stacklua/Gru.lua/refs/heads/main/main'))()")
 end
 
 local positionX = (Players.LocalPlayer.Character or Players.LocalPlayer.CharacterAdded:Wait()):WaitForChild('HumanoidRootPart').Position
@@ -148,7 +150,7 @@ local sNames = {
 	"statusWebhookBox","goalDiff","blacklistHop"
 }
 local sValues = {
-	true, 15, true, "", "FREE GRU!",
+	true, 5, true, "", "FREE GRU!",
 	true, true,
 	{"Thank you","Thanks","ty","tysm"},
 	{"HELP FREE GRU"},
@@ -317,6 +319,7 @@ local function serverHop()
 						local chosen = servers[math.random(1, #servers)]
 						-- Record current server in history before leaving
 						table.insert(serverHistory, { jobId = game.JobId, time = os.time() })
+						getgenv().loadedRR = nil
 						pcall(function() TS:TeleportToPlaceInstance(PlaceId, chosen.id, P.LocalPlayer) end)
 					end
 				end
@@ -326,7 +329,9 @@ local function serverHop()
 end
 
 function waitServerHop()
-	task.wait(safeNum(getgenv().settings.serverHopDelay, 15) * 60)
+	local delay = math.max(1, safeNum(getgenv().settings.serverHopDelay, 5)) * 60
+	task.wait(delay)
+	setHopReason("Timer")
 	serverHop()
 end
 
@@ -354,7 +359,8 @@ end
 
 local function playEmote()
 	local id = safeStr(getgenv().settings.emoteId)
-	if id == "" then return end
+	-- Note: Roblox engine fires a sanitization warn internally — this is cosmetic only, animation still plays
+	if id == "" or id == "0" then return end
 	local char = Players.LocalPlayer.Character
 	if not char then return end
 	local humanoid = char:FindFirstChildOfClass("Humanoid")
@@ -445,7 +451,7 @@ if _shufflerandom == 1 then
 else
 	_boothlocation = _shuffled or workspace:WaitForChild('MapUI')
 end
-if not _boothlocation then return serverHop() end
+if not _boothlocation then setHopReason("Map UI not found"); return serverHop() end
 
 -- SECTION: Booth Text
 local function formatNumber(n)
@@ -496,13 +502,13 @@ function updateBoothText()
 	if not boothUI then return end
 	local signLabel = boothUI.Sign.TextLabel
 	if signLabel.Text == text then return end
-	if signLabel.Text:find("##") and nx >= 1 then return serverHop() end
+	if signLabel.Text:find("##") and nx >= 1 then setHopReason("Tagged booth") return serverHop() end
 	local payload = {
 		textFont          = Enum.Font.Arial,
 		richText          = true,
 		strokeColor       = Color3.new(0,0,0),
 		strokeOpacity     = 0,
-		textColor         = Color3.fromHex("#00ff00"),
+		textColor         = Color3.fromHex("#ffffff"),
 		buttonStrokeColor = Color3.new(0,0,0),
 		buttonTextColor   = Color3.new(1,1,1),
 		buttonColor       = Color3.new(98,255,0),
@@ -658,7 +664,7 @@ local function checkBlacklist(player)
 	local bl = safeTable(getgenv().settings.playerBlacklist)
 	local name = (player.Name or ""):lower()
 	for _, b in next, bl do
-		if b == name then sessionHops += 1; serverHop(); return end
+		if b == name then sessionHops += 1; setHopReason("Blacklisted: " .. player.Name); serverHop(); return end
 	end
 end
 
@@ -844,7 +850,7 @@ Tabs.Server:AddToggle("ServerHopToggle", {
 
 Tabs.Server:AddInput("ServerHopDelay", {
 	Title    = "Hop Delay (minutes)",
-	Default  = tostring(safeNum(getgenv().settings.serverHopDelay, 15)),
+	Default  = tostring(safeNum(getgenv().settings.serverHopDelay, 5)),
 	Callback = function(v)
 		if tonumber(v) then getgenv().settings.serverHopDelay = tonumber(v); saveSettings(); hopSet() end
 	end
@@ -1017,7 +1023,7 @@ if #unclaimed == 0 then
 	pcall(findUnclaimed)
 end
 local claimCount = #unclaimed
-if not unclaimed[1] then serverHop(); return end
+if not unclaimed[1] then setHopReason("No booths available"); serverHop(); return end
 
 -- SECTION: Walk To Booth
 getgenv().walkToBooth = function()
@@ -1051,14 +1057,14 @@ local function boothclaim()
 end
 
 while not pcall(boothclaim) do
-	if errCount >= claimCount then serverHop() end
+	if errCount >= claimCount then setHopReason("All booths taken"); serverHop() end
 	table.remove(unclaimed, 1); errCount += 1
 end
 hopSet()
 
 local _claimedUI = _boothlocation.BoothUI:FindFirstChild("BoothUI" .. tostring(unclaimed[1]))
 if _claimedUI and _claimedUI.Sign.TextLabel.Text:find("##") then
-	serverHop(); return
+	setHopReason("Tagged booth") serverHop(); return
 end
 
 raisedAtClaim = tonumber(newRaisedFormat.Value) or 0
@@ -1118,6 +1124,7 @@ task.spawn(function()
 	while task.wait(30) do
 		if #Players:GetPlayers() < 5 then
 			Fluent:Notify({ Title = "Low Population", Content = "Less than 5 players — hopping", Duration = 3 })
+			setHopReason("Low population")
 			serverHop()
 		end
 	end
@@ -1192,7 +1199,7 @@ task.spawn(function()
 				task.wait(1)
 				if string.find(boothUI.Details.Owner.Text, Players.LocalPlayer.DisplayName) then
 					bclaimed = true; updateBoothText()
-				else serverHop() end
+				else setHopReason("Booth reclaim failed"); serverHop() end
 			end
 		end
 	end
@@ -1210,7 +1217,7 @@ task.spawn(function()
 	while task.wait(5) do
 		local char = Players.LocalPlayer.Character
 		if char and char:FindFirstChildOfClass('Humanoid') and char:FindFirstChildOfClass('Humanoid').RootPart then
-			if (char:FindFirstChildOfClass('Humanoid').RootPart.Position - positionX).Magnitude > 1100 then serverHop() end
+			if (char:FindFirstChildOfClass('Humanoid').RootPart.Position - positionX).Magnitude > 1100 then setHopReason("Position drift"); serverHop() end
 		end
 	end
 end)
@@ -1289,7 +1296,7 @@ for _, player in next, Players:GetPlayers() do
 end
 
 -- SECTION: Server Hop Loop
-while task.wait(safeNum(getgenv().settings.serverHopDelay, 15) * 60) do
+while task.wait(math.max(1, safeNum(getgenv().settings.serverHopDelay, 5)) * 60) do
 	if not hopTimer then hopSet() end
 end
 
