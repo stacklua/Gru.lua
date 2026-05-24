@@ -99,7 +99,7 @@ local httprequest     = (syn and syn.request) or http and http.request or http_r
 local httpservice     = HttpService
 
 if queueonteleport then
-	queueonteleport("loadstring(game:HttpGet('https://raw.githubusercontent.com/stacklua/Gru.lua/refs/heads/main/main'))()")
+	queueonteleport("loadstring(game:HttpGet('YOUR_GITHUB_RAW_URL_HERE'))()")
 end
 
 local positionX = (Players.LocalPlayer.Character or Players.LocalPlayer.CharacterAdded:Wait()):WaitForChild('HumanoidRootPart').Position
@@ -632,7 +632,6 @@ local function webhook(raised, donor, donorId)
 			end)
 		end
 	end
-
 end
 
 -- SECTION: Anti-Bot & Blacklist
@@ -705,7 +704,7 @@ Tabs.Booth:AddInput("GoalDiff", {
 	end
 })
 
--- ======================== MAIN ========================
+-- ======================== EMOTE ========================
 -- Anonymous mode always on
 getgenv().settings.AnonymousMode = true
 task.delay(5, function() Remotes.Event('SetAnonymousLive'):FireServer(true) end)
@@ -720,8 +719,6 @@ Tabs.Main:AddToggle("AutoEmote", {
 		if v then playEmote() else stopEmote() end
 	end
 })
-
-
 
 -- ======================== AUTO CHAT ========================
 Tabs.AutoChat:AddToggle("AutoThanks", {
@@ -798,10 +795,6 @@ Tabs.AutoChat:AddInput("DonateResponce", {
 	Default  = joinCommaReplies(getgenv().settings.donateResponce),
 	Callback = function(v) getgenv().settings.donateResponce = splitCommaReplies(v); saveSettings() end
 })
-
-
-
-
 
 -- ======================== WEBHOOK ========================
 Tabs.Webhook:AddToggle("WebhookToggle", {
@@ -885,8 +878,6 @@ Tabs.Server:AddInput("PlayerBlacklist", {
 	end
 })
 
-
-
 -- ======================== RESOURCES ========================
 local resourcePreserverActive = false
 local platformStandConn       = nil
@@ -917,7 +908,7 @@ local function activateResourcePreserver()
 	-- Wipe terrain geometry
 	pcall(function() workspace.Terrain:Clear() end)
 
-	-- Create a small baseplate under the character to stand on
+	-- Create a baseplate under the character to stand on
 	pcall(function()
 		local char = Players.LocalPlayer.Character
 		local hrp  = char and char:FindFirstChild("HumanoidRootPart")
@@ -946,7 +937,6 @@ local function activateResourcePreserver()
 	bf.BackgroundColor3       = Color3.new(0, 0, 0)
 	bf.BorderSizePixel        = 0
 	bf.Parent                 = gruBlackout
-	-- Raise all other Gru GUIs above the blackout
 	for _, gui in ipairs(CoreGui:GetChildren()) do
 		if gui:IsA("ScreenGui") and gui.Name ~= "GruBlackout" and gui.Name ~= "RobloxGui" then
 			pcall(function() gui.DisplayOrder = 100 end)
@@ -957,7 +947,6 @@ local function activateResourcePreserver()
 end
 
 local function deactivateResourcePreserver()
-	-- Remove blackout
 	local existing = CoreGui:FindFirstChild("GruBlackout")
 	if existing then pcall(function() existing:Destroy() end) end
 	if platformStandConn then platformStandConn:Disconnect(); platformStandConn = nil end
@@ -1019,7 +1008,14 @@ local function findUnclaimed()
 	end
 end
 
+-- Wait for booth UI owner data to populate before scanning
+task.wait(3)
 if not pcall(findUnclaimed) then serverHop() end
+-- Retry once if nothing found
+if #unclaimed == 0 then
+	task.wait(3)
+	pcall(findUnclaimed)
+end
 local claimCount = #unclaimed
 if not unclaimed[1] then serverHop(); return end
 
@@ -1245,7 +1241,6 @@ Players.PlayerChatted:Connect(function(_, player, message)
 				local function reply(key)
 					local t = safeTable(getgenv().settings[key])
 					if #t == 0 then return end
-					-- Build list of replies not on cooldown (30s per message)
 					local now = os.time()
 					local available = {}
 					for _, r in ipairs(t) do
@@ -1253,7 +1248,7 @@ Players.PlayerChatted:Connect(function(_, player, message)
 							table.insert(available, r)
 						end
 					end
-					if #available == 0 then available = t end -- all on cd, pick any
+					if #available == 0 then available = t end
 					local chosen = available[math.random(#available)]
 					lastReply[chosen] = os.time()
 					chat(chosen)
@@ -1275,11 +1270,9 @@ end)
 -- SECTION: Blacklist + Auto-Destroy Other Characters
 local function setupCharacterDestroy(player)
 	if player == Players.LocalPlayer then return end
-	-- Destroy current character immediately if present
 	if player.Character then
 		pcall(function() player.Character:Destroy() end)
 	end
-	-- Destroy each new character as it spawns
 	player.CharacterAdded:Connect(function(char)
 		task.wait(0.1)
 		pcall(function() char:Destroy() end)
