@@ -165,7 +165,6 @@ local sValues = {
 
 if isfile and isfile("grudonate.txt") then
 	local ok = pcall(function() getgenv().settings = HttpService:JSONDecode(readfile('grudonate.txt')) end)
-	if ok then pcall(function() writefile('grudonate_backup.txt', httpservice:JSONEncode(getgenv().settings)) end) end
 end
 for i, v in ipairs(sNames) do
 	if getgenv().settings[v] == nil then getgenv().settings[v] = sValues[i] end
@@ -871,8 +870,11 @@ Tabs.Server:AddInput("PlayerBlacklist", {
 -- ======================== RESOURCES ========================
 local resourcePreserverActive = false
 local platformStandConn       = nil
+local resourcePreserverDone   = false  -- prevent double-run
 
 local function activateResourcePreserver()
+	if resourcePreserverDone then return end
+	resourcePreserverDone = true
 	repeat task.wait(0.5) until bclaimed
 	task.wait(1)
 	local charName = (Players.LocalPlayer.Character and Players.LocalPlayer.Character.Name) or ""
@@ -925,6 +927,7 @@ local function activateResourcePreserver()
 end
 
 local function deactivateResourcePreserver()
+	resourcePreserverDone = false
 	local existing = CoreGui:FindFirstChild("GruBlackout")
 	if existing then pcall(function() existing:Destroy() end) end
 	if platformStandConn then platformStandConn:Disconnect(); platformStandConn = nil end
