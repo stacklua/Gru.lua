@@ -101,7 +101,7 @@ local httprequest     = (syn and syn.request) or http and http.request or http_r
 local httpservice     = HttpService
 
 if queueonteleport then
-	queueonteleport("loadstring(game:HttpGet('https://raw.githubusercontent.com/stacklua/Gru.lua/refs/heads/main/main'))()")
+	queueonteleport("loadstring(game:HttpGet('YOUR_GITHUB_RAW_URL_HERE'))()")
 end
 
 local positionX = (Players.LocalPlayer.Character or Players.LocalPlayer.CharacterAdded:Wait()):WaitForChild('HumanoidRootPart').Position
@@ -140,7 +140,7 @@ end
 
 getgenv().settings = {}
 local sNames = {
-	"serverHopToggle","serverHopDelay","webhookToggle","webhookBox",
+	"webhookToggle","webhookBox",
 	"customBoothText","autoThanks","autoBeg","thanksMessage","begMessage","begDelay",
 	"thanksDelay","AlternativeHop","autoNearReply","boothPosition","standingPosition",
 	"AnonymousMode","fontFace","taggedBoothHop",
@@ -150,7 +150,7 @@ local sNames = {
 	"statusWebhookBox","goalDiff","blacklistHop"
 }
 local sValues = {
-	true, 5, true, "", "FREE GRU!",
+	true, "", "FREE GRU!",
 	true, true,
 	{"Thank you","Thanks","ty","tysm"},
 	{"HELP FREE GRU"},
@@ -328,16 +328,27 @@ local function serverHop()
 	end
 end
 
-function waitServerHop()
-	local delay = math.max(1, safeNum(getgenv().settings.serverHopDelay, 5)) * 60
-	task.wait(delay)
-	setHopReason("Timer")
-	serverHop()
-end
+local HOP_INTERVAL = 4 * 60   -- always 4 minutes
+local nextHopTime  = nil
 
 local function hopSet()
 	if hopTimer then task.cancel(hopTimer) end
-	if getgenv().settings.serverHopToggle then hopTimer = task.spawn(waitServerHop) end
+	nextHopTime = os.time() + HOP_INTERVAL
+	hopTimer = task.spawn(function()
+		while task.wait(1) do
+			if os.time() >= nextHopTime then
+				setHopReason("Timer")
+				serverHop()
+				return
+			end
+		end
+	end)
+end
+
+local function extendHopTimer()
+	if nextHopTime then
+		nextHopTime = nextHopTime + 60  -- push back 1 minute on donation
+	end
 end
 
 local function twn(...) return TweenService:Create(...) end
@@ -842,20 +853,6 @@ Tabs.Webhook:AddInput("PingAboveDono", {
 })
 
 -- ======================== SERVER ========================
-Tabs.Server:AddToggle("ServerHopToggle", {
-	Title    = "Auto Server Hop",
-	Default  = getgenv().settings.serverHopToggle or false,
-	Callback = function(v) getgenv().settings.serverHopToggle = v; hopSet(); saveSettings() end
-})
-
-Tabs.Server:AddInput("ServerHopDelay", {
-	Title    = "Hop Delay (minutes)",
-	Default  = tostring(safeNum(getgenv().settings.serverHopDelay, 5)),
-	Callback = function(v)
-		if tonumber(v) then getgenv().settings.serverHopDelay = tonumber(v); saveSettings(); hopSet() end
-	end
-})
-
 if vcEnabled then
 	Tabs.Server:AddToggle("AlternativeHop", {
 		Title    = "Random Normal/VC Servers",
@@ -1069,7 +1066,7 @@ end
 
 raisedAtClaim = tonumber(newRaisedFormat.Value) or 0
 updateBoothText()
-Fluent:Notify({ Title = "Booth Claimed", Content = "Slot #" .. tostring(unclaimed[1]), Duration = 3 })
+Fluent:Notify({ Title = "Booth Claimed", Content = "Booth claimed", Duration = 3 })
 
 -- Status embed loop
 task.spawn(function()
@@ -1163,7 +1160,7 @@ ReplicatedStorage.VFXObjects.CreateVfx.OnClientEvent:Connect(function(...)
 	local playerWhoDonated
 	sgoalR = sgoalR + (newRaisedFormat.Value - RaisedC)
 	local raised = don
-	hopSet()
+	extendHopTimer()  -- push hop back 1 minute on donation
 
 	if getgenv().settings.webhookToggle and safeStr(getgenv().settings.webhookBox) ~= "" then
 		task.spawn(function()
@@ -1295,10 +1292,7 @@ for _, player in next, Players:GetPlayers() do
 	setupCharacterDestroy(player)
 end
 
--- SECTION: Server Hop Loop
-while task.wait(math.max(1, safeNum(getgenv().settings.serverHopDelay, 5)) * 60) do
-	if not hopTimer then hopSet() end
-end
+-- SECTION: Server Hop Loop (handled by hopSet)
 
 -- SECTION: Reloader
 task.spawn(function()
