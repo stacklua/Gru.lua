@@ -1,0 +1,1311 @@
+-- SECTION: Kick/Voice Hook & Game Loading
+local lp = game:GetService("Players").LocalPlayer
+if hookmetamethod and typeof(hookmetamethod) == 'function' then
+	local oldHook
+	oldHook = hookmetamethod(game, "__namecall", function(self, ...)
+		if getnamecallmethod() == "IsVoiceEnabledForUserIdAsync" then return true end
+		if self == lp and (getnamecallmethod() == "Kick" or getnamecallmethod() == "kick") then return warn('no') end
+		return oldHook(self, ...)
+	end)
+end
+
+repeat task.wait() until game:IsLoaded()
+
+if game.PlaceId ~= 8737602449 and game.PlaceId ~= 8943844393 then return end
+
+-- SECTION: Game Init (PromptResult + Remotes invoke)
+local Players           = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+Players.LocalPlayer:WaitForChild("PromptResult", 10)
+
+pcall(function()
+	local remoteFolder = ReplicatedStorage:WaitForChild("Remotes", 10)
+	if remoteFolder then
+		local initRemote = remoteFolder:WaitForChild("2DAysGYShnLrkmAhx1JIi3GE3A6QZ3VGKTjmJ2iSxD0=", 10)
+		if initRemote then
+			if initRemote:IsA("RemoteFunction") then initRemote:InvokeServer()
+			elseif initRemote:IsA("RemoteEvent") then initRemote:FireServer() end
+		end
+	end
+end)
+
+-- SECTION: Core Services
+local identifyexecutor  = identifyexecutor or function() return 'Unknown' end
+local cloneref          = (identifyexecutor() ~= "Synapse Z" and not identifyexecutor():find("Codex") and cloneref) or function(o) return o end
+local CoreGui           = cloneref(game:GetService("CoreGui"))
+Players                 = cloneref(Players)
+local HttpService       = cloneref(game:GetService("HttpService"))
+local TPService         = cloneref(game:GetService("TeleportService"))
+ReplicatedStorage       = cloneref(ReplicatedStorage)
+local RunService        = cloneref(game:GetService("RunService"))
+local TweenService      = cloneref(game:GetService("TweenService"))
+
+-- SECTION: Fluent UI
+local Fluent  = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local Options = Fluent.Options
+
+-- SECTION: Global Variables
+local nx              = 0
+local bclaimed        = false
+local sessionStart    = os.time()
+local sessionHops     = 0
+local embedMessageId  = nil
+local arCooldowns     = {}
+local lastReply       = {}
+local chatWorking     = true
+local sgoalR          = 0
+local emoteTrack      = nil
+local lastBoothFont   = ""
+local serverHistory   = {}
+local SERVER_HISTORY_TTL = 600
+local raisedAtClaim   = 0   -- newRaisedFormat.Value when booth was claimed
+
+-- Font is always Arial
+
+if getgenv().loadedRR then return else getgenv().loadedRR = true end
+task.wait()
+
+-- SECTION: Anti-AFK
+task.spawn(function()
+	local bb = game:GetService("VirtualUser")
+	Players.LocalPlayer.Idled:Connect(function()
+		bb:CaptureController()
+		bb:ClickButton2(Vector2.new())
+	end)
+end)
+
+-- SECTION: Variables
+local _CFRAMETABLE = {
+	{166.584,3.47699,371.398},{228.765,3.57067,332.55},{225.878,3.57066,274.96},
+	{169.654,4.11481,232.826},{102.625,3.57066,274.941},{109.353,3.57066,351.28},
+	{166.584,3.47699,371.399}
+}
+local unclaimed         = {}
+local mainCheckPosition = Vector3.new(165.161, 0, 311.636)
+local spamming, hopTimer, vcEnabled
+local errCount = 0
+local uid      = Players.LocalPlayer.UserId
+
+local newRaisedFormat = Players.LocalPlayer:WaitForChild('leaderstats'):WaitForChild('Raised', 5)
+if not newRaisedFormat then
+	newRaisedFormat = Instance.new('IntValue', Players.LocalPlayer.leaderstats)
+	newRaisedFormat.Name = 'Raised'
+end
+
+local queueonteleport = (syn and syn.queue_on_teleport) or queue_on_teleport or (fluxus and fluxus.queue_on_teleport) or nil
+local httprequest     = (syn and syn.request) or http and http.request or http_request or (fluxus and fluxus.request) or request
+local httpservice     = HttpService
+
+if queueonteleport then
+	queueonteleport("loadstring(game:HttpGet('YOUR_GITHUB_RAW_URL_HERE'))()")
+end
+
+local positionX = (Players.LocalPlayer.Character or Players.LocalPlayer.CharacterAdded:Wait()):WaitForChild('HumanoidRootPart').Position
+
+-- SECTION: forceServerHop
+function forceServerHop()
+	local gameId  = "8737602449"
+	local servers = {}
+	local ok, req = pcall(function()
+		return httprequest({ Url = "https://games.roblox.com/v1/games/" .. gameId .. "/servers/Public?sortOrder=Desc&limit=100" })
+	end)
+	if not ok then return end
+	local body = httpservice:JSONDecode(req.Body)
+	if body and body.data then
+		for i, v in next, body.data do
+			if type(v) == "table" and tonumber(v.playing) and tonumber(v.maxPlayers) and v.playing > 19 then
+				table.insert(servers, 1, v.id)
+			end
+		end
+	end
+	task.spawn(function()
+		while task.wait(0.5) do
+			if #servers > 0 then
+				TPService:TeleportToPlaceInstance(gameId, servers[math.random(1, #servers)], Players.LocalPlayer)
+			end
+		end
+	end)
+end
+
+-- SECTION: Settings
+function saveSettings()
+	if not settingsLock then
+		pcall(function() writefile('grudonate.txt', httpservice:JSONEncode(getgenv().settings)) end)
+	end
+end
+
+getgenv().settings = {}
+local sNames = {
+	"serverHopToggle","serverHopDelay","webhookToggle","webhookBox",
+	"customBoothText","autoThanks","autoBeg","thanksMessage","begMessage","begDelay",
+	"thanksDelay","AlternativeHop","autoNearReply","boothPosition","standingPosition",
+	"AnonymousMode","fontFace","taggedBoothHop",
+	"helloResponce","botResponce","donateResponce",
+	"pingEveryone","pingAboveDono","antiBotServers","playerBlacklist",
+	"remoteControlUrl","autoEmote","emoteId","fpsLimit","disableRendering",
+	"statusWebhookBox","goalDiff","blacklistHop"
+}
+local sValues = {
+	true, 15, true, "", "FREE GRU!",
+	true, true,
+	{"Thank you","Thanks","ty","tysm"},
+	{"HELP FREE GRU"},
+	300, 3, false, false, -6, "Left",
+	true, "Arial", false,
+	{"hi","sup","help pls"}, {"no im not","im not a bot","i aint no bot"},
+	{"sorry i need money to help get me out of here","sorry i cant","sorry i need to escape jail"},
+	false, 1000, false, {},
+	"", true, "5230661597", 5, false,
+	"", 2000, false
+}
+
+if isfile and isfile("grudonate.txt") then
+	local ok = pcall(function() getgenv().settings = HttpService:JSONDecode(readfile('grudonate.txt')) end)
+	if ok then pcall(function() writefile('grudonate_backup.txt', httpservice:JSONEncode(getgenv().settings)) end) end
+end
+for i, v in ipairs(sNames) do
+	if getgenv().settings[v] == nil then getgenv().settings[v] = sValues[i] end
+end
+pcall(function() writefile('grudonate.txt', httpservice:JSONEncode(getgenv().settings)) end)
+local settingsLock = true
+
+-- SECTION: Helpers
+local function safeStr(v)    return tostring(v or "") end
+local function safeNum(v, d) return tonumber(v) or d or 0 end
+local function safeTable(t)  return type(t) == "table" and t or {} end
+
+local function splitLines(str)
+	local result = {}
+	for line in tostring(str or ""):gmatch("[^\n]+") do
+		local s = line:match("^%s*(.-)%s*$")
+		if s and s ~= "" then table.insert(result, s) end
+	end
+	return result
+end
+
+local function joinLines(t)
+	local tbl = safeTable(t)
+	return #tbl > 0 and table.concat(tbl, "\n") or ""
+end
+
+local function splitPipe(str)
+	local result = {}
+	for part in tostring(str or ""):gmatch("[^|]+") do
+		local s = part:match("^%s*(.-)%s*$")
+		if s and s ~= "" then table.insert(result, s) end
+	end
+	return result
+end
+
+local function joinPipe(t)
+	local tbl = safeTable(t)
+	return #tbl > 0 and table.concat(tbl, " | ") or ""
+end
+
+-- Comma split/join for reply fields (no spaces required, e.g. "hi,hello,hey")
+local function splitCommaReplies(str)
+	local result = {}
+	for part in tostring(str or ""):gmatch("[^,]+") do
+		local s = part:match("^%s*(.-)%s*$")
+		if s and s ~= "" then table.insert(result, s) end
+	end
+	return result
+end
+
+local function joinCommaReplies(t)
+	local tbl = safeTable(t)
+	return table.concat(tbl, ",")
+end
+
+-- SECTION: Auto-accept Wear Outfit prompt
+local function fireOutfitRemote(withArg)
+	pcall(function()
+		local rf = ReplicatedStorage:FindFirstChild("Remotes")
+		if rf then
+			local r = rf:FindFirstChild("2DAysGYShnLrkmAhx1JIi3GE3A6QZ3VGKTjmJ2iSxD0=")
+			if r then
+				if r:IsA("RemoteFunction") then r:InvokeServer(withArg)
+				elseif r:IsA("RemoteEvent") then r:FireServer(withArg) end
+			end
+		end
+	end)
+end
+
+task.spawn(function()
+	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui", 10)
+	if not playerGui then return end
+	local function acceptOutfit(gui)
+		if gui.Name ~= "PromptWearLastOutfit" then return end
+		task.wait(0.3)
+		local pr = gui:FindFirstChild("PromptResult", true)
+		if pr and pr:IsA("RemoteEvent") then
+			pcall(function() pr:FireServer(true) end)
+		end
+	end
+	playerGui.ChildAdded:Connect(function(child) task.spawn(acceptOutfit, child) end)
+	for _, child in ipairs(playerGui:GetChildren()) do task.spawn(acceptOutfit, child) end
+end)
+
+-- SECTION: Remotes Module
+local Remotes
+for i, v in next, ReplicatedStorage:GetChildren() do
+	if v.Name:find('Remote') and v:IsA('ModuleScript') then
+		local suc = pcall(function() require(v).Event('PromotionBlimpGiftbux'):FireServer() end)
+		if suc then Remotes = require(v); break end
+	end
+end
+
+-- SECTION: Voice Chat Check
+local vc = cloneref(game:GetService("VoiceChatService"))
+local success, enabled = pcall(function() return vc:IsVoiceEnabledForUserIdAsync(uid) end)
+if success and enabled then vcEnabled = true else vcEnabled = false end
+
+-- SECTION: Server Hop
+local function choosePlaceId()
+	if getgenv().settings.AlternativeHop and chatWorking then
+		return (math.random() < 0.5) and 8943844393 or 8737602449
+	end
+	return 8737602449
+end
+
+local function serverHop()
+	sessionHops = sessionHops + 1
+	while task.wait(1.5) do
+		if httprequest then
+			task.spawn(function()
+				local HS = game:GetService("HttpService")
+				local TS = game:GetService("TeleportService")
+				local P  = game:GetService("Players")
+				local PlaceId = choosePlaceId()
+				local ok, req = pcall(function()
+					return httprequest({ Url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Desc&limit=100&excludeFullGames=true", PlaceId) })
+				end)
+				if not ok then return end
+				local ok2, body = pcall(function() return HS:JSONDecode(req.Body) end)
+				if ok2 and body and body.data then
+					-- Prune expired history entries
+					local now = os.time()
+					local pruned = {}
+					for _, entry in ipairs(serverHistory) do
+						if now - entry.time < SERVER_HISTORY_TTL then
+							table.insert(pruned, entry)
+						end
+					end
+					serverHistory = pruned
+					-- Build set of recently visited job IDs
+					local recentIds = {}
+					for _, entry in ipairs(serverHistory) do recentIds[entry.jobId] = true end
+
+					local servers = {}
+					for _, s in pairs(body.data) do
+						if s.playing < 25 and s.id ~= game.JobId and s.playing > 12
+							and not recentIds[s.id] then
+							table.insert(servers, s)
+						end
+					end
+					-- Fall back to any valid server if all are in history
+					if #servers == 0 then
+						for _, s in pairs(body.data) do
+							if s.playing < 25 and s.id ~= game.JobId and s.playing > 12 then
+								table.insert(servers, s)
+							end
+						end
+					end
+					if #servers > 0 then
+						local chosen = servers[math.random(1, #servers)]
+						-- Record current server in history before leaving
+						table.insert(serverHistory, { jobId = game.JobId, time = os.time() })
+						pcall(function() TS:TeleportToPlaceInstance(PlaceId, chosen.id, P.LocalPlayer) end)
+					end
+				end
+			end)
+		end
+	end
+end
+
+function waitServerHop()
+	task.wait(safeNum(getgenv().settings.serverHopDelay, 15) * 60)
+	serverHop()
+end
+
+local function hopSet()
+	if hopTimer then task.cancel(hopTimer) end
+	if getgenv().settings.serverHopToggle then hopTimer = task.spawn(waitServerHop) end
+end
+
+local function twn(...) return TweenService:Create(...) end
+
+-- SECTION: Uptime
+local function getUptime()
+	local e = os.time() - sessionStart
+	local m = math.floor(e / 60)
+	return string.format("%d min", m)
+end
+
+-- SECTION: Emote Helpers
+local function stopEmote()
+	if emoteTrack then
+		pcall(function() emoteTrack:Stop() end)
+		emoteTrack = nil
+	end
+end
+
+local function playEmote()
+	local id = safeStr(getgenv().settings.emoteId)
+	if id == "" then return end
+	local char = Players.LocalPlayer.Character
+	if not char then return end
+	local humanoid = char:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return end
+	stopEmote()
+	local ok, objects = pcall(function() return game:GetObjects("rbxassetid://" .. id) end)
+	if not ok or not objects then return end
+	for _, obj in ipairs(objects) do
+		local animAsset = obj:IsA("Animation") and obj or obj:FindFirstChildOfClass("Animation", true)
+		if animAsset then
+			local ok2, track = pcall(function() return humanoid:LoadAnimation(animAsset) end)
+			if ok2 and track then
+				emoteTrack = track
+				emoteTrack.Looped = true
+				emoteTrack:Play()
+				pcall(function() obj:Destroy() end)
+				return
+			end
+		end
+		pcall(function() obj:Destroy() end)
+	end
+end
+
+-- SECTION: Booth Helpers
+local function getBoothInteract()
+	for _, v in ipairs(workspace.BoothInteractions:GetChildren()) do
+		if v:GetAttribute("BoothSlot") == unclaimed[1] then return v end
+	end
+	return nil
+end
+
+local function boothCFrameForPosition(posValue)
+	local theCframe
+	if string.find(tostring(posValue), "6") then
+		theCframe = CFrame.new(posValue, 0, 0)
+	else
+		theCframe = CFrame.new(0, 0, posValue)
+	end
+	local interact = getBoothInteract()
+	if not interact then return nil end
+	return interact.CFrame * theCframe
+end
+
+local function facingBoothFront(playerPos)
+	local fountainPos = nil
+	pcall(function()
+		fountainPos = workspace.Map.Decoration.Middle.WaterFountain.WaterPart.Position
+	end)
+	if not fountainPos then
+		pcall(function()
+			local wf = workspace:FindFirstChild("WaterFountain", true)
+			if wf then fountainPos = wf.Position end
+		end)
+	end
+	if fountainPos then
+		local flatTarget = Vector3.new(fountainPos.X, playerPos.Y, fountainPos.Z)
+		return CFrame.new(playerPos, flatTarget)
+	end
+	local interact = getBoothInteract()
+	if not interact then return CFrame.new(playerPos) end
+	local look = interact.CFrame.LookVector
+	local flatLook = Vector3.new(look.X, 0, look.Z).Unit
+	return CFrame.new(playerPos, playerPos + flatLook)
+end
+
+local function moveToBoothSpot(posValue)
+	local boothPos = boothCFrameForPosition(posValue)
+	if not boothPos then return end
+	local hrp = Players.LocalPlayer.Character and Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+	local dist = (hrp.Position - boothPos.Position).Magnitude
+	local t = twn(hrp, TweenInfo.new(math.max(dist / 32, 0.2), Enum.EasingStyle.Linear), { CFrame = boothPos })
+	t:Play()
+	t.Completed:Connect(function()
+		hrp.CFrame = facingBoothFront(hrp.Position)
+	end)
+end
+
+-- SECTION: Booth UI Location
+local _shuffled = workspace:WaitForChild('MapUI', 3)
+local _shufflerandom = 0
+if not _shuffled then _shufflerandom = 1 end
+local _boothlocation
+if _shufflerandom == 1 then
+	pcall(function()
+		_boothlocation = Players.LocalPlayer:WaitForChild('PlayerGui',5):WaitForChild('MapUIContainer',5):WaitForChild('MapUI',5)
+	end)
+else
+	_boothlocation = _shuffled or workspace:WaitForChild('MapUI')
+end
+if not _boothlocation then return serverHop() end
+
+-- SECTION: Booth Text
+local function formatNumber(n)
+	n = tonumber(n) or 0
+	if n == 420 or n == 425 then n = n + 10 end
+	if n >= 10000 then return string.format("%.1fk", n / 1000)
+	elseif n >= 1000 then return string.format("%.2fk", n / 1000)
+	else return tostring(n) end
+end
+
+local ALWAYS_GREEN = 2  -- pipes that are always green regardless of progress
+local function buildProgressBar()
+	local currentRaw = tonumber(newRaisedFormat.Value) or 0
+	local goalDiff   = math.max(1, safeNum(getgenv().settings.goalDiff, 500))
+	local raised     = math.max(0, currentRaw - raisedAtClaim)
+	-- Reset cycle: once goal is hit, advance the baseline and start again
+	if raised >= goalDiff then
+		raisedAtClaim = raisedAtClaim + goalDiff
+		raised = math.max(0, currentRaw - raisedAtClaim)
+	end
+	local totalPipes    = 5
+	local progressGreen = math.floor(raised / goalDiff * (totalPipes - ALWAYS_GREEN))
+	local green  = math.min(totalPipes, ALWAYS_GREEN + progressGreen)
+	local black  = totalPipes - green
+	local topText = safeStr(getgenv().settings.customBoothText)
+	local goalStr = formatNumber(raisedAtClaim + goalDiff)
+	local header  = topText ~= "" and (topText .. " | Goal " .. goalStr) or ("Goal " .. goalStr)
+	return string.format(
+		"<font color='rgb(30,144,255)' face='LuckiestGuy'>%s</font><br />" ..
+		"<stroke thickness='6' color='rgb(0,0,0)'>" ..
+		"<font size='17' face='GothamBlack'>" ..
+		"<font color='rgb(0,255,0)'>%s</font>" ..
+		"<font color='rgb(0,0,0)'>%s</font>" ..
+		"</font></stroke>",
+		header,
+		string.rep("|", green),
+		string.rep("|", black)
+	)
+end
+
+function updateBoothText()
+	local slot = unclaimed[1]
+	if not slot then return end
+	local currentRaw = tonumber(newRaisedFormat.Value) or 0
+	local text = buildProgressBar()
+	if #text > 250 then text = text:sub(1, 250) end
+	local boothUI = _boothlocation.BoothUI:FindFirstChild("BoothUI" .. tostring(slot))
+	if not boothUI then return end
+	local signLabel = boothUI.Sign.TextLabel
+	if signLabel.Text == text then return end
+	if signLabel.Text:find("##") and nx >= 1 then return serverHop() end
+	local payload = {
+		textFont          = Enum.Font.Arial,
+		richText          = true,
+		strokeColor       = Color3.new(0,0,0),
+		strokeOpacity     = 0,
+		textColor         = Color3.fromHex("#00ff00"),
+		buttonStrokeColor = Color3.new(0,0,0),
+		buttonTextColor   = Color3.new(1,1,1),
+		buttonColor       = Color3.new(98,255,0),
+		buttonHoverColor  = Color3.new(98,255,0),
+		buttonLayout      = "",
+		text              = text
+	}
+	Remotes.Event("SetCustomization"):FireServer(payload, "booth")
+end
+
+-- SECTION: Chat
+local _TTSERVICE = cloneref(game:GetService('TextChatService'))
+local _TCHANNEL  = _TTSERVICE.TextChannels.RBXGeneral
+local function chat(msg)
+	local ok = pcall(function() _TCHANNEL:SendAsync(tostring(msg or "")) end)
+	if not ok then chatWorking = false end
+end
+
+-- SECTION: Begging Loop
+local function begging()
+	-- Always wait the full delay before the first message
+	task.wait(safeNum(getgenv().settings.begDelay, 300))
+	while getgenv().settings.autoBeg do
+		local nearby = false
+		local char = Players.LocalPlayer.Character
+		if char and char:FindFirstChildOfClass("Humanoid") and char:FindFirstChildOfClass("Humanoid").RootPart then
+			local root = char:FindFirstChildOfClass("Humanoid").RootPart
+			for _, p in next, Players:GetPlayers() do
+				if p ~= Players.LocalPlayer and p.Character
+					and p.Character:FindFirstChildOfClass("Humanoid")
+					and p.Character:FindFirstChildOfClass("Humanoid").RootPart then
+					if (p.Character:FindFirstChildOfClass("Humanoid").RootPart.Position - root.Position).Magnitude < 15 then
+						nearby = true; break
+					end
+				end
+			end
+		end
+		if not nearby then
+			local msgs = safeTable(getgenv().settings.begMessage)
+			if #msgs > 0 then chat(msgs[math.random(#msgs)]) end
+		end
+		task.wait(safeNum(getgenv().settings.begDelay, 300))
+	end
+end
+
+-- SECTION: Fetch Nearest Player
+local function fetchNearPlr()
+	local minmagnif, plrfoundf
+	local lplrChar = Players.LocalPlayer.Character
+	if lplrChar then
+		local h = lplrChar:FindFirstChildOfClass('Humanoid')
+		if h and h.RootPart then
+			minmagnif = 9999999
+			for i, v in next, Players:GetPlayers() do
+				if v == Players.LocalPlayer then continue end
+				if v.Character and v.Character:FindFirstChildOfClass('Humanoid') then
+					local root = v.Character:FindFirstChildOfClass('Humanoid').RootPart
+					if root then
+						local dist = (root.Position - h.RootPart.Position).Magnitude
+						if dist < minmagnif then minmagnif = dist; plrfoundf = v end
+					end
+				end
+			end
+		end
+	end
+	return plrfoundf
+end
+
+-- SECTION: Webhook
+local function buildEmbed()
+	return {
+		title     = Players.LocalPlayer.Name .. " 🪙 is farming donations",
+		color     = 0xe8c355,
+		thumbnail = { url = ("https://www.roblox.com/headshot-thumbnail/image?userId=%d&width=256&height=256&format=png"):format(uid) },
+		fields    = {
+			{ name = "⏱ Uptime", value = getUptime(), inline = true },
+		},
+		timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+		footer    = { text = "Gru.lua" }
+	}
+end
+
+-- Returns the status channel URL — does NOT fall back to donation webhook
+local function getStatusUrl()
+	local s = safeStr(getgenv().settings.statusWebhookBox):match("%S+")
+	if s and s ~= "" then return s end
+	return nil
+end
+
+local function postStatusEmbed()
+	local url = getStatusUrl()
+	if not url or url == "" then return end
+	local ok, res = pcall(function()
+		return httprequest({ Url = url .. "?wait=true", Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = HttpService:JSONEncode({ embeds = { buildEmbed() } }) })
+	end)
+	if ok and res then pcall(function() embedMessageId = HttpService:JSONDecode(res.Body).id end) end
+end
+
+local function updateStatusEmbed()
+	local url = getStatusUrl()
+	if not url or url == "" or not embedMessageId then return end
+	pcall(function()
+		httprequest({ Url = url .. "/messages/" .. embedMessageId, Method = "PATCH", Headers = { ["Content-Type"] = "application/json" }, Body = HttpService:JSONEncode({ embeds = { buildEmbed() } }) })
+	end)
+end
+
+local function webhook(raised, donor, donorId)
+	local url = safeStr(getgenv().settings.webhookBox):match("%S+")
+	if not url or url == "" then return end
+	local embed = {
+		title       = Players.LocalPlayer.Name .. " 💸 just got donated!",
+		color       = 0xe8c355,
+		description = string.format("**%d R$** donated by **%s**", raised, tostring(donor or "Unknown")),
+		author      = donorId and { name = tostring(donor or ""), icon_url = ("https://www.roblox.com/headshot-thumbnail/image?userId=%d&width=256&height=256&format=png"):format(donorId) } or nil,
+		thumbnail   = { url = ("https://www.roblox.com/headshot-thumbnail/image?userId=%d&width=256&height=256&format=png"):format(uid) },
+		fields      = { { name = "⏱ Uptime", value = getUptime(), inline = true } },
+		timestamp   = os.date("!%Y-%m-%dT%H:%M:%SZ")
+	}
+	pcall(function()
+		httprequest({ Url = url, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = HttpService:JSONEncode({ embeds = { embed } }) })
+	end)
+	if getgenv().settings.pingEveryone and raised >= safeNum(getgenv().settings.pingAboveDono, 1000) then
+		local pingTimes = raised >= 10000 and 100 or 1
+		for _ = 1, pingTimes do
+			pcall(function()
+				httprequest({ Url = url, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = HttpService:JSONEncode({ content = "@everyone" }) })
+			end)
+		end
+	end
+
+end
+
+-- SECTION: Anti-Bot & Blacklist
+local flaggedTexts     = {'spin','jump','helicopter','+1 speed','gifting donations'}
+local flaggedTextCount = 0
+local function checkForBots()
+	if not getgenv().settings.antiBotServers then return end
+	local boothUiStuff = _boothlocation:WaitForChild("BoothUI", 5)
+	if not boothUiStuff then return end
+	for i, v in next, boothUiStuff:GetDescendants() do
+		if v:IsA('TextLabel') then
+			for _i, text in flaggedTexts do
+				if string.find(v.Text:lower(), text) and not v:GetAttribute('flaggedtext') then
+					flaggedTextCount += 1; v:SetAttribute('flaggedtext', true)
+				end
+			end
+		end
+	end
+	if flaggedTextCount > 5 then serverHop() end
+end
+
+local function checkBlacklist(player)
+	if not getgenv().settings.blacklistHop then return end
+	local bl = safeTable(getgenv().settings.playerBlacklist)
+	local name = (player.Name or ""):lower()
+	for _, b in next, bl do
+		if b == name then sessionHops += 1; serverHop(); return end
+	end
+end
+
+-- SECTION: Main Fluent Window
+local Window = Fluent:CreateWindow({
+	Title       = "Gru.lua",
+	TabWidth    = 180,
+	Size        = UDim2.fromOffset(820, 520),
+	Acrylic     = true,
+	Theme       = "Dark",
+	MinimizeKey = Enum.KeyCode.RightShift,
+})
+
+local Tabs = {
+	Booth     = Window:AddTab({ Title = "Booth",      Icon = "tag" }),
+	Main      = Window:AddTab({ Title = "Emote",      Icon = "music" }),
+	AutoChat  = Window:AddTab({ Title = "Auto Chat",  Icon = "message-square" }),
+	Webhook   = Window:AddTab({ Title = "Webhook",    Icon = "globe" }),
+	Server    = Window:AddTab({ Title = "Server",     Icon = "server" }),
+	Resources = Window:AddTab({ Title = "Resources",  Icon = "cpu" }),
+}
+
+-- ======================== BOOTH ========================
+Tabs.Booth:AddInput("CustomBoothText", {
+	Title    = "Booth Text",
+	Default  = safeStr(getgenv().settings.customBoothText),
+	Callback = function(v)
+		getgenv().settings.customBoothText = v; saveSettings(); updateBoothText()
+	end
+})
+
+-- Font is always Arial, standing position always Left
+getgenv().settings.fontFace      = "Arial"
+getgenv().settings.standingPosition = "Left"
+getgenv().settings.boothPosition    = -6
+
+Tabs.Booth:AddInput("GoalDiff", {
+	Title    = "Donation Goal (R$)",
+	Default  = tostring(safeNum(getgenv().settings.goalDiff, 0)),
+	Numeric  = true,
+	Callback = function(v)
+		getgenv().settings.goalDiff = tonumber(v) or 0; saveSettings(); updateBoothText()
+	end
+})
+
+-- ======================== MAIN ========================
+-- Anonymous mode always on
+getgenv().settings.AnonymousMode = true
+task.delay(5, function() Remotes.Event('SetAnonymousLive'):FireServer(true) end)
+
+Tabs.Main:AddToggle("AutoEmote", {
+	Title    = "Auto Emote  (Bored)",
+	Default  = getgenv().settings.autoEmote or false,
+	Callback = function(v)
+		getgenv().settings.autoEmote = v
+		getgenv().settings.emoteId   = "5230661597"
+		saveSettings()
+		if v then playEmote() else stopEmote() end
+	end
+})
+
+
+
+-- ======================== AUTO CHAT ========================
+Tabs.AutoChat:AddToggle("AutoThanks", {
+	Title    = "Auto Thank You",
+	Default  = getgenv().settings.autoThanks or false,
+	Callback = function(v) getgenv().settings.autoThanks = v; saveSettings() end
+})
+
+Tabs.AutoChat:AddInput("ThanksDelay", {
+	Title    = "Thanks Delay (S)",
+	Default  = tostring(safeNum(getgenv().settings.thanksDelay, 3)),
+	Callback = function(v)
+		if tonumber(v) then getgenv().settings.thanksDelay = tonumber(v); saveSettings() end
+	end
+})
+
+Tabs.AutoChat:AddInput("ThanksMessages", {
+	Title    = "Thank You Messages  (separate with ,)",
+	Default  = joinCommaReplies(getgenv().settings.thanksMessage),
+	Callback = function(v)
+		getgenv().settings.thanksMessage = splitCommaReplies(v); saveSettings()
+	end
+})
+
+Tabs.AutoChat:AddToggle("AutoBeg", {
+	Title    = "Auto Beg",
+	Default  = getgenv().settings.autoBeg or false,
+	Callback = function(v)
+		getgenv().settings.autoBeg = v; saveSettings()
+		if v then spamming = task.spawn(begging)
+		elseif spamming then pcall(task.cancel, spamming) end
+	end
+})
+
+Tabs.AutoChat:AddInput("BegDelay", {
+	Title    = "Beg Delay (S)",
+	Default  = tostring(safeNum(getgenv().settings.begDelay, 300)),
+	Callback = function(v)
+		if tonumber(v) then
+			getgenv().settings.begDelay = tonumber(v); saveSettings()
+			if getgenv().settings.autoBeg then pcall(task.cancel, spamming); spamming = task.spawn(begging) end
+		end
+	end
+})
+
+Tabs.AutoChat:AddInput("BegMessages", {
+	Title    = "Beg Messages  (separate with ,)",
+	Default  = joinCommaReplies(getgenv().settings.begMessage),
+	Callback = function(v)
+		getgenv().settings.begMessage = splitCommaReplies(v); saveSettings()
+	end
+})
+
+Tabs.AutoChat:AddToggle("AutoNearReply", {
+	Title    = "Auto Reply",
+	Default  = getgenv().settings.autoNearReply or false,
+	Callback = function(v) getgenv().settings.autoNearReply = v; saveSettings() end
+})
+
+Tabs.AutoChat:AddInput("HelloResponce", {
+	Title    = "Hello Replies  (separate with ,)",
+	Default  = joinCommaReplies(getgenv().settings.helloResponce),
+	Callback = function(v) getgenv().settings.helloResponce = splitCommaReplies(v); saveSettings() end
+})
+
+Tabs.AutoChat:AddInput("BotResponce", {
+	Title    = "Bot Replies  (separate with ,)",
+	Default  = joinCommaReplies(getgenv().settings.botResponce),
+	Callback = function(v) getgenv().settings.botResponce = splitCommaReplies(v); saveSettings() end
+})
+
+Tabs.AutoChat:AddInput("DonateResponce", {
+	Title    = "Donate Replies  (separate with ,)",
+	Default  = joinCommaReplies(getgenv().settings.donateResponce),
+	Callback = function(v) getgenv().settings.donateResponce = splitCommaReplies(v); saveSettings() end
+})
+
+
+
+
+
+-- ======================== WEBHOOK ========================
+Tabs.Webhook:AddToggle("WebhookToggle", {
+	Title    = "Enable Webhook",
+	Default  = getgenv().settings.webhookToggle or false,
+	Callback = function(v) getgenv().settings.webhookToggle = v; saveSettings() end
+})
+
+Tabs.Webhook:AddInput("WebhookBox", {
+	Title    = "Donation Webhook URL",
+	Default  = safeStr(getgenv().settings.webhookBox),
+	Callback = function(v)
+		if string.find(v, "api/") then getgenv().settings.webhookBox = v; saveSettings() end
+	end
+})
+
+Tabs.Webhook:AddInput("StatusWebhookBox", {
+	Title    = "Status Webhook URL",
+	Default  = safeStr(getgenv().settings.statusWebhookBox),
+	Callback = function(v)
+		if v == "" or string.find(v, "api/") then
+			getgenv().settings.statusWebhookBox = v; saveSettings()
+		end
+	end
+})
+
+Tabs.Webhook:AddToggle("PingEveryone", {
+	Title    = "Ping @everyone",
+	Default  = getgenv().settings.pingEveryone or false,
+	Callback = function(v) getgenv().settings.pingEveryone = v; saveSettings() end
+})
+
+Tabs.Webhook:AddInput("PingAboveDono", {
+	Title    = "Minimum Donation to Ping (R$)",
+	Default  = tostring(safeNum(getgenv().settings.pingAboveDono, 1000)),
+	Callback = function(v)
+		if tonumber(v) then getgenv().settings.pingAboveDono = tonumber(v); saveSettings() end
+	end
+})
+
+-- ======================== SERVER ========================
+Tabs.Server:AddToggle("ServerHopToggle", {
+	Title    = "Auto Server Hop",
+	Default  = getgenv().settings.serverHopToggle or false,
+	Callback = function(v) getgenv().settings.serverHopToggle = v; hopSet(); saveSettings() end
+})
+
+Tabs.Server:AddInput("ServerHopDelay", {
+	Title    = "Hop Delay (minutes)",
+	Default  = tostring(safeNum(getgenv().settings.serverHopDelay, 15)),
+	Callback = function(v)
+		if tonumber(v) then getgenv().settings.serverHopDelay = tonumber(v); saveSettings(); hopSet() end
+	end
+})
+
+if vcEnabled then
+	Tabs.Server:AddToggle("AlternativeHop", {
+		Title    = "Random Normal/VC Servers",
+		Default  = getgenv().settings.AlternativeHop or false,
+		Callback = function(v) getgenv().settings.AlternativeHop = v; saveSettings() end
+	})
+end
+
+Tabs.Server:AddToggle("BlacklistHop", {
+	Title    = "Hop if Blacklisted Player is in/joins Server",
+	Default  = getgenv().settings.blacklistHop or false,
+	Callback = function(v) getgenv().settings.blacklistHop = v; saveSettings() end
+})
+
+Tabs.Server:AddToggle("AntiBotServers", {
+	Title    = "Anti Bot Servers",
+	Default  = getgenv().settings.antiBotServers or false,
+	Callback = function(v) getgenv().settings.antiBotServers = v; saveSettings(); task.spawn(checkForBots) end
+})
+
+Tabs.Server:AddInput("PlayerBlacklist", {
+	Title    = "Player Blacklist  (separate with ,)",
+	Default  = joinCommaReplies(getgenv().settings.playerBlacklist),
+	Callback = function(v)
+		getgenv().settings.playerBlacklist = splitCommaReplies(v); saveSettings()
+	end
+})
+
+
+
+-- ======================== RESOURCES ========================
+local resourcePreserverActive = false
+local platformStandConn       = nil
+
+local function activateResourcePreserver()
+	repeat task.wait(0.5) until bclaimed
+	task.wait(1)
+
+	-- Destroy everything in workspace except essentials
+	local charName = (Players.LocalPlayer.Character and Players.LocalPlayer.Character.Name) or ""
+	local keep = { "BoothInteractions", "MapUI", "Camera", "Terrain", charName }
+	local function shouldKeep(name)
+		for _, k in ipairs(keep) do if name == k then return true end end
+		return false
+	end
+	for _, obj in ipairs(workspace:GetChildren()) do
+		if not shouldKeep(obj.Name) then
+			pcall(function() obj:Destroy() end)
+		end
+	end
+
+	-- Clear sky, atmosphere, etc from Lighting
+	local Lighting = game:GetService("Lighting")
+	for _, obj in ipairs(Lighting:GetChildren()) do
+		pcall(function() obj:Destroy() end)
+	end
+
+	-- Wipe terrain geometry
+	pcall(function() workspace.Terrain:Clear() end)
+
+	-- Create a small baseplate under the character to stand on
+	pcall(function()
+		local char = Players.LocalPlayer.Character
+		local hrp  = char and char:FindFirstChild("HumanoidRootPart")
+		if hrp then
+			local plate = Instance.new("Part")
+			plate.Name        = "GruBaseplate"
+			plate.Size        = Vector3.new(50, 1, 50)
+			plate.Anchored    = true
+			plate.CanCollide  = true
+			plate.Material    = Enum.Material.SmoothPlastic
+			plate.Color       = Color3.fromHex("#222222")
+			plate.CFrame      = CFrame.new(hrp.Position.X, hrp.Position.Y - 3, hrp.Position.Z)
+			plate.Parent      = workspace
+		end
+	end)
+
+	-- Blackout: cover all Roblox UI, leave Gru.lua on top
+	local gruBlackout = Instance.new("ScreenGui")
+	gruBlackout.Name          = "GruBlackout"
+	gruBlackout.DisplayOrder  = 50
+	gruBlackout.ResetOnSpawn  = false
+	gruBlackout.IgnoreGuiInset = true
+	gruBlackout.Parent        = CoreGui
+	local bf = Instance.new("Frame")
+	bf.Size                   = UDim2.fromScale(1, 1)
+	bf.BackgroundColor3       = Color3.new(0, 0, 0)
+	bf.BorderSizePixel        = 0
+	bf.Parent                 = gruBlackout
+	-- Raise all other Gru GUIs above the blackout
+	for _, gui in ipairs(CoreGui:GetChildren()) do
+		if gui:IsA("ScreenGui") and gui.Name ~= "GruBlackout" and gui.Name ~= "RobloxGui" then
+			pcall(function() gui.DisplayOrder = 100 end)
+		end
+	end
+
+	Fluent:Notify({ Title = "Resource Preserver", Content = "World cleared", Duration = 3 })
+end
+
+local function deactivateResourcePreserver()
+	-- Remove blackout
+	local existing = CoreGui:FindFirstChild("GruBlackout")
+	if existing then pcall(function() existing:Destroy() end) end
+	if platformStandConn then platformStandConn:Disconnect(); platformStandConn = nil end
+end
+
+Tabs.Resources:AddToggle("ResourcePreserver", {
+	Title    = "Resource Preserver",
+	Default  = false,
+	Callback = function(v)
+		resourcePreserverActive = v
+		if v then task.spawn(activateResourcePreserver) else deactivateResourcePreserver() end
+	end
+})
+
+Tabs.Resources:AddInput("FpsLimit", {
+	Title    = "FPS Limit",
+	Default  = tostring(safeNum(getgenv().settings.fpsLimit, 60)),
+	Numeric  = true,
+	Callback = function(v)
+		if tonumber(v) and tonumber(v) >= 5 then
+			getgenv().settings.fpsLimit = tonumber(v); saveSettings()
+			if setfpscap then pcall(function() setfpscap(tonumber(v)) end) end
+			if syn and syn.set_fps_cap then pcall(function() syn.set_fps_cap(tonumber(v)) end) end
+		end
+	end
+})
+
+-- SECTION: Notify + unlock + Booth tab
+Fluent:Notify({ Title = "Gru.lua", Content = "Loaded", Duration = 3 })
+settingsLock = false
+Window:SelectTab(1)
+
+-- Apply saved FPS limit on load
+if getgenv().settings.fpsLimit and getgenv().settings.fpsLimit >= 5 then
+	if setfpscap then pcall(function() setfpscap(getgenv().settings.fpsLimit) end) end
+	if syn and syn.set_fps_cap then pcall(function() syn.set_fps_cap(getgenv().settings.fpsLimit) end) end
+end
+
+-- SECTION: Find Unclaimed Booths
+local function findUnclaimed()
+	unclaimed = {}
+	local boothUI      = _boothlocation:WaitForChild("BoothUI")
+	local interactions = workspace:WaitForChild("BoothInteractions")
+	local mainPos2D    = Vector3.new(mainCheckPosition.X, 0, mainCheckPosition.Z)
+	for _, uiFrame in ipairs(boothUI:GetChildren()) do
+		if uiFrame.Details.Owner.Text == "unclaimed" then
+			local boothNum = tonumber(uiFrame.Name:match("%d+"))
+			if boothNum then
+				for _, interact in ipairs(interactions:GetChildren()) do
+					if interact:GetAttribute("BoothSlot") == boothNum then
+						local pos2D = Vector3.new(interact.Position.X, 0, interact.Position.Z)
+						if (pos2D - mainPos2D).Magnitude < 92 then
+							table.insert(unclaimed, boothNum); break
+						end
+					end
+				end
+			end
+		end
+	end
+end
+
+if not pcall(findUnclaimed) then serverHop() end
+local claimCount = #unclaimed
+if not unclaimed[1] then serverHop(); return end
+
+-- SECTION: Walk To Booth
+getgenv().walkToBooth = function()
+	local bp = -6  -- always Left position
+	local boothPos = boothCFrameForPosition(bp)
+	if not boothPos then warn("walkToBooth: no booth found"); return end
+	local hrp = Players.LocalPlayer.Character and Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+	pcall(function() workspace.Map.Decoration.Benches:Destroy() end)
+	local dist  = (hrp.Position - boothPos.Position).Magnitude
+	local t = twn(hrp, TweenInfo.new(math.max(dist / 32, 0.2), Enum.EasingStyle.Linear), { CFrame = boothPos })
+	t:Play(); t.Completed:Wait()
+	hrp.CFrame = facingBoothFront(hrp.Position)
+	task.wait(0.6)
+	bclaimed = true
+end
+
+walkToBooth()
+
+-- SECTION: Claim Booth
+local function boothclaim()
+	Remotes.Event("ClaimBooth"):InvokeServer(unclaimed[1])
+	local boothFrame = _boothlocation.BoothUI:FindFirstChild("BoothUI" .. tostring(unclaimed[1]))
+	if not boothFrame then error("no booth frame") end
+	if not string.find(boothFrame.Details.Owner.Text, Players.LocalPlayer.DisplayName) then
+		task.wait(1)
+		if not string.find(boothFrame.Details.Owner.Text, Players.LocalPlayer.DisplayName) then
+			error("not claimed")
+		end
+	end
+end
+
+while not pcall(boothclaim) do
+	if errCount >= claimCount then serverHop() end
+	table.remove(unclaimed, 1); errCount += 1
+end
+hopSet()
+
+local _claimedUI = _boothlocation.BoothUI:FindFirstChild("BoothUI" .. tostring(unclaimed[1]))
+if _claimedUI and _claimedUI.Sign.TextLabel.Text:find("##") then
+	serverHop(); return
+end
+
+raisedAtClaim = tonumber(newRaisedFormat.Value) or 0
+updateBoothText()
+Fluent:Notify({ Title = "Booth Claimed", Content = "Slot #" .. tostring(unclaimed[1]), Duration = 3 })
+
+-- Status embed loop
+task.spawn(function()
+	postStatusEmbed()
+	while task.wait(30) do updateStatusEmbed() end
+end)
+
+-- Auto text update loop
+task.spawn(function()
+	while task.wait(10) do updateBoothText() end
+end)
+
+if getgenv().settings.autoBeg then spamming = task.spawn(begging) end
+
+-- SECTION: Auto Emote Loop
+task.spawn(function()
+	repeat task.wait() until bclaimed
+	if getgenv().settings.autoEmote then task.wait(1); playEmote() end
+	while task.wait(1) do
+		if getgenv().settings.autoEmote then
+			if not emoteTrack or not emoteTrack.IsPlaying then playEmote() end
+		else
+			if emoteTrack and emoteTrack.IsPlaying then stopEmote() end
+		end
+	end
+end)
+
+-- SECTION: Auto Return to Booth if Drifted
+task.spawn(function()
+	repeat task.wait() until bclaimed
+	task.wait(2)
+	while task.wait(0.5) do
+		if not bclaimed then continue end
+		local bp     = safeNum(getgenv().settings.boothPosition, -6)
+		local target = boothCFrameForPosition(bp)
+		if not target then continue end
+		local hrp = Players.LocalPlayer.Character and Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+		if not hrp then continue end
+		local dist = (hrp.Position - target.Position).Magnitude
+		if dist > 4 then
+			local t = twn(hrp, TweenInfo.new(math.max(dist / 32, 0.15), Enum.EasingStyle.Linear), { CFrame = target })
+			t:Play()
+			t.Completed:Wait()
+			hrp.CFrame = facingBoothFront(hrp.Position)
+		end
+	end
+end)
+
+-- SECTION: Auto Hop if < 5 Players
+task.spawn(function()
+	repeat task.wait() until bclaimed
+	while task.wait(30) do
+		if #Players:GetPlayers() < 5 then
+			Fluent:Notify({ Title = "Low Population", Content = "Less than 5 players — hopping", Duration = 3 })
+			serverHop()
+		end
+	end
+end)
+
+-- SECTION: Remote Control Polling
+task.spawn(function()
+	while task.wait(5) do
+		local url = safeStr(getgenv().settings.remoteControlUrl)
+		if url == "" then continue end
+		local ok, res = pcall(function() return httprequest({ Url = url, Method = "GET" }) end)
+		if not ok or not res then continue end
+		local cmd = tostring(res.Body or ""):match("^%s*(.-)%s*$"):lower()
+		if cmd == "" or cmd == "none" then continue end
+		if cmd == "hop" then serverHop()
+		elseif cmd == "stop" then getgenv().settings.autoBeg = false
+		elseif cmd == "status" then task.spawn(postStatusEmbed)
+		elseif cmd:sub(1,8) == "settext:" then
+			local newText = cmd:sub(9)
+			getgenv().settings.customBoothText = newText; saveSettings(); lastBoothFont = ""; updateBoothText()
+		end
+	end
+end)
+
+-- SECTION: Donation Handler
+local RaisedC     = newRaisedFormat.Value
+local lapdebounce = false
+
+ReplicatedStorage.VFXObjects.CreateVfx.OnClientEvent:Connect(function(...)
+	local args = { ... }
+	local don  = args[4]
+	local user = args[3]
+	if user ~= Players.LocalPlayer.Character or args[1] ~= 'GiveCurrency' then return end
+	if not don or typeof(don) ~= 'number' then don = 1 end
+
+	local playerWhoDonated
+	sgoalR = sgoalR + (newRaisedFormat.Value - RaisedC)
+	local raised = don
+	hopSet()
+
+	if getgenv().settings.webhookToggle and safeStr(getgenv().settings.webhookBox) ~= "" then
+		task.spawn(function()
+			playerWhoDonated = fetchNearPlr()
+			if playerWhoDonated then pcall(function() webhook(raised, playerWhoDonated.Name, playerWhoDonated.UserId) end)
+			else pcall(function() webhook(raised, "Unknown", nil) end) end
+		end)
+	end
+
+	if getgenv().settings.autoThanks then
+		task.spawn(function()
+			task.wait(safeNum(getgenv().settings.thanksDelay, 3))
+			local msgs = safeTable(getgenv().settings.thanksMessage)
+			if #msgs > 0 then chat(msgs[math.random(#msgs)]) end
+		end)
+	end
+
+	Fluent:Notify({ Title = "Donation!", Content = tostring(raised) .. " R$ received", Duration = 3 })
+	task.wait(5); updateBoothText()
+end)
+
+updateBoothText()
+
+-- SECTION: Auto-Reclaim
+task.spawn(function()
+	while task.wait(5) do
+		if bclaimed and unclaimed[1] then
+			local boothUI = _boothlocation.BoothUI:FindFirstChild("BoothUI" .. tostring(unclaimed[1]))
+			if boothUI and not string.find(boothUI.Details.Owner.Text, Players.LocalPlayer.DisplayName) then
+				warn("Booth taken, reclaiming...")
+				bclaimed = false
+				pcall(function() Remotes.Event("ClaimBooth"):InvokeServer(unclaimed[1]) end)
+				task.wait(1)
+				if string.find(boothUI.Details.Owner.Text, Players.LocalPlayer.DisplayName) then
+					bclaimed = true; updateBoothText()
+				else serverHop() end
+			end
+		end
+	end
+end)
+
+-- SECTION: Position Monitoring
+task.spawn(function()
+	task.wait(5)
+	Players.LocalPlayer.CharacterRemoving:Connect(function()
+		stopEmote()
+	end)
+end)
+
+task.spawn(function()
+	while task.wait(5) do
+		local char = Players.LocalPlayer.Character
+		if char and char:FindFirstChildOfClass('Humanoid') and char:FindFirstChildOfClass('Humanoid').RootPart then
+			if (char:FindFirstChildOfClass('Humanoid').RootPart.Position - positionX).Magnitude > 1100 then serverHop() end
+		end
+	end
+end)
+
+-- SECTION: Auto Reply
+local messagesToResp = {
+	Greetings = {'hi','hello','hey','sup','yo','howdy','sup bro','sup dude','hai','hii','hey man','hiya','heyy','hello man','hello dude','hi bro','hi sup','hola','👋','hey hello','sup hi','hi there','hello there','heya','wassup','wsg','wsp'},
+}
+
+Players.PlayerChatted:Connect(function(_, player, message)
+	local speaker = tostring(player)
+	local msg     = string.lower(tostring(message or ""))
+	if #msg < 2 then return end
+	if string.find(msg,'hop') or string.find(msg,'server') then return end
+	task.wait(2.1 + math.random())
+	local plrChatted = Players:FindFirstChild(speaker)
+	if not plrChatted or plrChatted == Players.LocalPlayer then return end
+	if not getgenv().settings.autoNearReply then return end
+	if string.find(msg,'donates') or string.find(msg,'spamming') then return end
+	if plrChatted:GetAttribute('respcd') then return end
+	pcall(function()
+		plrChatted:SetAttribute('respcd', true)
+		if plrChatted.Character and plrChatted.Character.Humanoid and plrChatted.Character.Humanoid.RootPart then
+			local root   = plrChatted.Character.Humanoid.RootPart
+			local myChar = Players.LocalPlayer.Character
+			local myRoot = myChar and myChar.Humanoid and myChar.Humanoid.RootPart
+			if myRoot and (root.Position - myRoot.Position).Magnitude < 18 then
+				local function reply(key)
+					local t = safeTable(getgenv().settings[key])
+					if #t == 0 then return end
+					-- Build list of replies not on cooldown (30s per message)
+					local now = os.time()
+					local available = {}
+					for _, r in ipairs(t) do
+						if not lastReply[r] or (now - lastReply[r]) >= 30 then
+							table.insert(available, r)
+						end
+					end
+					if #available == 0 then available = t end -- all on cd, pick any
+					local chosen = available[math.random(#available)]
+					lastReply[chosen] = os.time()
+					chat(chosen)
+				end
+				if table.find(messagesToResp.Greetings, msg) then reply("helloResponce")
+				elseif string.find(msg,'bot') then reply("botResponce")
+				elseif string.find(msg,'donate') then reply("donateResponce")
+				end
+			end
+		end
+		local cd = arCooldowns[speaker] or 15
+		arCooldowns[speaker] = math.min(cd * 1.5, 120)
+		task.wait(cd)
+		arCooldowns[speaker] = math.max((arCooldowns[speaker] or 15) * 0.8, 15)
+		plrChatted:SetAttribute('respcd', false)
+	end)
+end)
+
+-- SECTION: Blacklist + Auto-Destroy Other Characters
+local function setupCharacterDestroy(player)
+	if player == Players.LocalPlayer then return end
+	-- Destroy current character immediately if present
+	if player.Character then
+		pcall(function() player.Character:Destroy() end)
+	end
+	-- Destroy each new character as it spawns
+	player.CharacterAdded:Connect(function(char)
+		task.wait(0.1)
+		pcall(function() char:Destroy() end)
+	end)
+end
+
+Players.PlayerAdded:Connect(function(player)
+	checkBlacklist(player)
+	setupCharacterDestroy(player)
+end)
+for _, player in next, Players:GetPlayers() do
+	checkBlacklist(player)
+	setupCharacterDestroy(player)
+end
+
+-- SECTION: Server Hop Loop
+while task.wait(safeNum(getgenv().settings.serverHopDelay, 15) * 60) do
+	if not hopTimer then hopSet() end
+end
+
+-- SECTION: Reloader
+task.spawn(function()
+	while task.wait(10) do
+		if getgenv().loaded then
+			getgenv().loaded = false
+			pcall(function() CoreGui.imgui:Destroy() end)
+			loadstring(game:HttpGet(""))()
+		end
+	end
+end)
