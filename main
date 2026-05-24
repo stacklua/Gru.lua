@@ -923,7 +923,6 @@ local function activateResourcePreserver()
 	-- Apply FPS cap (hardcoded to 5 for resource preserver)
 	pcall(function() setfpscap(5) end)
 
-	Fluent:Notify({ Title = "Resource Preserver", Content = "World cleared", Duration = 3 })
 end
 
 local function deactivateResourcePreserver()
