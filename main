@@ -1,4 +1,3 @@
--- SECTION: Kick/Voice Hook & Game Loading
 local lp = game:GetService("Players").LocalPlayer
 if hookmetamethod and typeof(hookmetamethod) == 'function' then
 	local oldHook
@@ -13,7 +12,6 @@ repeat task.wait() until game:IsLoaded()
 
 if game.PlaceId ~= 8737602449 and game.PlaceId ~= 8943844393 then return end
 
--- SECTION: Game Init (PromptResult + Remotes invoke)
 local Players           = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -30,7 +28,6 @@ pcall(function()
 	end
 end)
 
--- SECTION: Core Services
 local identifyexecutor  = identifyexecutor or function() return 'Unknown' end
 local cloneref          = (identifyexecutor() ~= "Synapse Z" and not identifyexecutor():find("Codex") and cloneref) or function(o) return o end
 local CoreGui           = cloneref(game:GetService("CoreGui"))
@@ -41,13 +38,11 @@ ReplicatedStorage       = cloneref(ReplicatedStorage)
 local RunService        = cloneref(game:GetService("RunService"))
 local TweenService      = cloneref(game:GetService("TweenService"))
 
--- SECTION: Fluent UI
 local Fluent  = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 local Options = Fluent.Options
 
-local function setHopReason(_) end  -- reason tracking (UI removed)
+local function setHopReason(_) end
 
--- SECTION: Global Variables
 local nx              = 0
 local bclaimed        = false
 getgenv().shrekSessionStart = getgenv().shrekSessionStart or os.time()
@@ -63,12 +58,9 @@ local serverHistory   = {}
 local SERVER_HISTORY_TTL = 600
 local raisedAtClaim   = 0
 
--- Font is always Arial
-
 if getgenv().loadedShrek then return else getgenv().loadedShrek = true end
 task.wait()
 
--- SECTION: Anti-AFK
 task.spawn(function()
 	local bb = game:GetService("VirtualUser")
 	Players.LocalPlayer.Idled:Connect(function()
@@ -77,7 +69,6 @@ task.spawn(function()
 	end)
 end)
 
--- SECTION: Variables
 local _CFRAMETABLE = {
 	{166.584,3.47699,371.398},{228.765,3.57067,332.55},{225.878,3.57066,274.96},
 	{169.654,4.11481,232.826},{102.625,3.57066,274.941},{109.353,3.57066,351.28},
@@ -105,7 +96,6 @@ end
 
 local positionX = (Players.LocalPlayer.Character or Players.LocalPlayer.CharacterAdded:Wait()):WaitForChild('HumanoidRootPart').Position
 
--- SECTION: forceServerHop
 function forceServerHop()
 	local gameId  = "8737602449"
 	local servers = {}
@@ -130,7 +120,6 @@ function forceServerHop()
 	end)
 end
 
--- SECTION: Settings
 function saveSettings()
 	if not settingsLock then
 		pcall(function() writefile('shrekdonate.txt', httpservice:JSONEncode(getgenv().settings)) end)
@@ -158,7 +147,7 @@ local sValues = {
 	{"hi","sup","help pls"}, {"no im not","im not a bot","i aint no bot"},
 	{"sorry i need money to help get me out of here","sorry i cant","sorry i need to escape jail"},
 	false, 1000, false, {},
-	"", true, "140721363933318",
+	"", true, "5230661597",
 	500, false, false
 }
 
@@ -171,7 +160,6 @@ end
 pcall(function() writefile('shrekdonate.txt', httpservice:JSONEncode(getgenv().settings)) end)
 local settingsLock = true
 
--- SECTION: Helpers
 local function safeStr(v)    return tostring(v or "") end
 local function safeNum(v, d) return tonumber(v) or d or 0 end
 local function safeTable(t)  return type(t) == "table" and t or {} end
@@ -190,7 +178,6 @@ local function joinCommaReplies(t)
 	return table.concat(tbl, ",")
 end
 
--- SECTION: Auto-accept Wear Outfit prompt
 local function fireOutfitRemote(withArg)
 	pcall(function()
 		local rf = ReplicatedStorage:FindFirstChild("Remotes")
@@ -219,7 +206,6 @@ task.spawn(function()
 	for _, child in ipairs(playerGui:GetChildren()) do task.spawn(acceptOutfit, child) end
 end)
 
--- SECTION: Remotes Module
 local Remotes
 for i, v in next, ReplicatedStorage:GetChildren() do
 	if v.Name:find('Remote') and v:IsA('ModuleScript') then
@@ -228,12 +214,10 @@ for i, v in next, ReplicatedStorage:GetChildren() do
 	end
 end
 
--- SECTION: Voice Chat Check
 local vc = cloneref(game:GetService("VoiceChatService"))
 local success, enabled = pcall(function() return vc:IsVoiceEnabledForUserIdAsync(uid) end)
 if success and enabled then vcEnabled = true else vcEnabled = false end
 
--- SECTION: Server Hop
 local function choosePlaceId()
 	if getgenv().settings.AlternativeHop and chatWorking then
 		return (math.random() < 0.5) and 8943844393 or 8737602449
@@ -317,14 +301,12 @@ end
 
 local function twn(...) return TweenService:Create(...) end
 
--- SECTION: Uptime
 local function getUptime()
 	local e = os.time() - sessionStart
 	local m = math.floor(e / 60)
 	return string.format("%d min", m)
 end
 
--- SECTION: Emote Helpers
 local function stopEmote()
 	if emoteTrack then
 		pcall(function() emoteTrack:Stop() end)
@@ -358,7 +340,6 @@ local function playEmote()
 	end
 end
 
--- SECTION: Booth Helpers
 local function getBoothInteract()
 	for _, v in ipairs(workspace.BoothInteractions:GetChildren()) do
 		if v:GetAttribute("BoothSlot") == unclaimed[1] then return v end
@@ -369,15 +350,12 @@ end
 local function boothCFrameForPosition(_)
 	local interact = getBoothInteract()
 	if not interact then return nil end
-	-- Step 1.5 studs out from the booth FRONT (negate LookVector which points inward)
 	local inward = Vector3.new(interact.CFrame.LookVector.X, 0, interact.CFrame.LookVector.Z).Unit
 	local outward = -inward
 	local pos = interact.CFrame.Position + outward * 1.5
-	-- Face outward (away from booth)
 	return CFrame.new(pos, pos + outward)
 end
 
--- SECTION: Booth UI Location
 local _shuffled = workspace:WaitForChild('MapUI', 3)
 local _shufflerandom = 0
 if not _shuffled then _shufflerandom = 1 end
@@ -391,7 +369,6 @@ else
 end
 if not _boothlocation then setHopReason("Map UI not found"); return serverHop() end
 
--- SECTION: Booth Text
 local function formatNumber(n)
 	n = tonumber(n) or 0
 	if n == 420 or n == 425 then n = n + 10 end
@@ -456,7 +433,6 @@ function updateBoothText()
 	Remotes.Event("SetCustomization"):FireServer(payload, "booth")
 end
 
--- SECTION: Chat
 local _TTSERVICE = cloneref(game:GetService('TextChatService'))
 local _TCHANNEL  = _TTSERVICE.TextChannels.RBXGeneral
 local function chat(msg)
@@ -464,7 +440,6 @@ local function chat(msg)
 	if not ok then chatWorking = false end
 end
 
--- SECTION: Begging Loop
 local function begging()
 	task.wait(safeNum(getgenv().settings.begDelay, 300))
 	while getgenv().settings.autoBeg do
@@ -490,7 +465,6 @@ local function begging()
 	end
 end
 
--- SECTION: Fetch Nearest Player
 local function fetchNearPlr()
 	local minmagnif, plrfoundf
 	local lplrChar = Players.LocalPlayer.Character
@@ -513,7 +487,6 @@ local function fetchNearPlr()
 	return plrfoundf
 end
 
--- SECTION: Webhook
 local function buildEmbed()
 	return {
 		title     = Players.LocalPlayer.Name .. " is farming donations",
@@ -552,7 +525,6 @@ local function webhook(raised, donor, donorId)
 	end
 end
 
--- SECTION: Anti-Bot & Blacklist
 local flaggedTexts     = {'spin','jump','helicopter','+1 speed','gifting donations'}
 local flaggedTextCount = 0
 local function checkForBots()
@@ -580,7 +552,6 @@ local function checkBlacklist(player)
 	end
 end
 
--- SECTION: Main Fluent Window
 local Window = Fluent:CreateWindow({
 	Title       = "Shrek.lua",
 	TabWidth    = 180,
@@ -599,7 +570,6 @@ local Tabs = {
 	Resources = Window:AddTab({ Title = "Resources",  Icon = "cpu" }),
 }
 
--- ======================== BOOTH ========================
 Tabs.Booth:AddInput("CustomBoothText", {
 	Title    = "Booth Text",
 	Default  = safeStr(getgenv().settings.customBoothText),
@@ -621,7 +591,6 @@ Tabs.Booth:AddInput("GoalDiff", {
 	end
 })
 
--- ======================== EMOTE ========================
 getgenv().settings.AnonymousMode = true
 task.delay(5, function() Remotes.Event('SetAnonymousLive'):FireServer(true) end)
 
@@ -630,13 +599,12 @@ Tabs.Main:AddToggle("AutoEmote", {
 	Default  = getgenv().settings.autoEmote or false,
 	Callback = function(v)
 		getgenv().settings.autoEmote = v
-		getgenv().settings.emoteId   = "140721363933318"
+		getgenv().settings.emoteId   = "5230661597"
 		saveSettings()
 		if v then playEmote() else stopEmote() end
 	end
 })
 
--- ======================== AUTO CHAT ========================
 Tabs.AutoChat:AddToggle("AutoThanks", {
 	Title    = "Auto Thank You",
 	Default  = getgenv().settings.autoThanks or false,
@@ -712,7 +680,6 @@ Tabs.AutoChat:AddInput("DonateResponce", {
 	Callback = function(v) getgenv().settings.donateResponce = splitCommaReplies(v); saveSettings() end
 })
 
--- ======================== WEBHOOK ========================
 Tabs.Webhook:AddToggle("WebhookToggle", {
 	Title    = "Enable Webhook",
 	Default  = getgenv().settings.webhookToggle or false,
@@ -741,7 +708,21 @@ Tabs.Webhook:AddInput("PingAboveDono", {
 	end
 })
 
--- ======================== SERVER ========================
+task.spawn(function()
+	while task.wait(1) do
+		if nextHopTime then
+			local remaining = math.max(0, nextHopTime - os.time())
+			local m = math.floor(remaining / 60)
+			local s = remaining % 60
+			pcall(function()
+				Window:SetTitle(string.format("Shrek.lua  |  hop in %dm %02ds", m, s))
+			end)
+		else
+			pcall(function() Window:SetTitle("Shrek.lua") end)
+		end
+	end
+end)
+
 if vcEnabled then
 	Tabs.Server:AddToggle("AlternativeHop", {
 		Title    = "Random Normal/VC Servers",
@@ -770,10 +751,9 @@ Tabs.Server:AddInput("PlayerBlacklist", {
 	end
 })
 
--- ======================== RESOURCES ========================
 local resourcePreserverActive = false
 local platformStandConn       = nil
-local resourcePreserverDone   = false  -- prevent double-run
+local resourcePreserverDone   = false
 
 local function activateResourcePreserver()
 	if resourcePreserverDone then return end
@@ -795,7 +775,6 @@ local function activateResourcePreserver()
 	pcall(function()
 		local char = Players.LocalPlayer.Character
 		local hrp  = char and char:FindFirstChild("HumanoidRootPart")
-		-- no platform needed
 	end)
 	local shrekBlackout = Instance.new("ScreenGui")
 	shrekBlackout.Name           = "ShrekBlackout"
@@ -813,7 +792,6 @@ local function activateResourcePreserver()
 			pcall(function() gui.DisplayOrder = 100 end)
 		end
 	end
-	-- Apply FPS cap (hardcoded to 5 for resource preserver)
 	pcall(function() setfpscap(5) end)
 
 end
@@ -835,20 +813,15 @@ Tabs.Resources:AddToggle("ResourcePreserver", {
 	end
 })
 
-
-
--- SECTION: Notify + unlock + Booth tab
 Fluent:Notify({ Title = "Shrek.lua", Content = "Loaded", Duration = 3 })
 settingsLock = false
 Window:SelectTab(1)
 
--- Auto-activate resource preserver if it was saved as on
 if getgenv().settings.resourcePreserver then
 	resourcePreserverActive = true
 	task.spawn(activateResourcePreserver)
 end
 
--- SECTION: Find Unclaimed Booths
 local function findUnclaimed()
 	unclaimed = {}
 	local boothUI      = _boothlocation:WaitForChild("BoothUI")
@@ -880,7 +853,6 @@ end
 local claimCount = #unclaimed
 if not unclaimed[1] then setHopReason("No booths available"); serverHop(); return end
 
--- SECTION: Walk To Booth
 getgenv().walkToBooth = function()
 	local boothPos = boothCFrameForPosition(-6)
 	if not boothPos then return end
@@ -889,15 +861,36 @@ getgenv().walkToBooth = function()
 	pcall(function() workspace.Map.Decoration.Benches:Destroy() end)
 	local dist = (hrp.Position - boothPos.Position).Magnitude
 	local t = twn(hrp, TweenInfo.new(math.max(dist / 32, 0.2), Enum.EasingStyle.Linear), { CFrame = boothPos })
-	t:Play(); t.Completed:Wait()
-	hrp.CFrame = boothPos  -- snap to exact position+rotation from boothCFrameForPosition
+	t:Play()
+	local tweenDone = false
+	t.Completed:Connect(function() tweenDone = true end)
+	task.spawn(function()
+		while not tweenDone do
+			task.wait(0.5)
+			if unclaimed[1] then
+				local boothFrame = _boothlocation.BoothUI:FindFirstChild("BoothUI" .. tostring(unclaimed[1]))
+				if boothFrame and boothFrame.Details.Owner.Text ~= "unclaimed"
+					and not string.find(boothFrame.Details.Owner.Text, Players.LocalPlayer.DisplayName) then
+					t:Cancel()
+					table.remove(unclaimed, 1)
+					if unclaimed[1] then
+						getgenv().walkToBooth()
+					else
+						serverHop()
+					end
+					return
+				end
+			end
+		end
+	end)
+	t.Completed:Wait()
+	hrp.CFrame = boothPos
 	task.wait(0.6)
 	bclaimed = true
 end
 
 walkToBooth()
 
--- SECTION: Claim Booth
 local function boothclaim()
 	Remotes.Event("ClaimBooth"):InvokeServer(unclaimed[1])
 	local boothFrame = _boothlocation.BoothUI:FindFirstChild("BoothUI" .. tostring(unclaimed[1]))
@@ -926,14 +919,22 @@ raisedAtClaim = tonumber(newRaisedFormat.Value) or 0
 updateBoothText()
 Fluent:Notify({ Title = "Booth Claimed", Content = "Farming has begun!", Duration = 3 })
 
--- Auto-equip DonateSign and set sign text once
 pcall(function()
 	local sign = Players.LocalPlayer.Backpack:FindFirstChild("DonateSign")
-	if sign then
-		sign.Parent = Players.LocalPlayer.Character
-	end
+	if not sign then return end
+	sign.Parent = Players.LocalPlayer.Character
 	task.wait(0.5)
-	Remotes.Event("SetCustomization"):FireServer("donate so Shrek can escape!", "sign")
+	local signText = "donate so Shrek can escape!"
+	local function applySignText(model)
+		for _, v in ipairs(model:GetDescendants()) do
+			if v:IsA("TextLabel") or v:IsA("TextButton") then
+				pcall(function() v.Text = signText end)
+			end
+		end
+	end
+	applySignText(sign)
+	local booth = sign:FindFirstChild("RDC25Booth", true)
+	if booth then applySignText(booth) end
 end)
 
 task.spawn(function()
@@ -942,7 +943,6 @@ end)
 
 if getgenv().settings.autoBeg then spamming = task.spawn(begging) end
 
--- SECTION: Auto Emote Loop
 task.spawn(function()
 	repeat task.wait() until bclaimed
 	if getgenv().settings.autoEmote then task.wait(1); playEmote() end
@@ -955,7 +955,6 @@ task.spawn(function()
 	end
 end)
 
--- SECTION: Auto Return to Booth if Drifted
 task.spawn(function()
 	repeat task.wait() until bclaimed
 	task.wait(2)
@@ -970,12 +969,11 @@ task.spawn(function()
 			local t = twn(hrp, TweenInfo.new(math.max(dist / 32, 0.15), Enum.EasingStyle.Linear), { CFrame = target })
 			t:Play()
 			t.Completed:Wait()
-			hrp.CFrame = target  -- exact CFrame including rotation from boothCFrameForPosition
+			hrp.CFrame = target
 		end
 	end
 end)
 
--- SECTION: Auto Hop if < 5 Players
 task.spawn(function()
 	repeat task.wait() until bclaimed
 	while task.wait(30) do
@@ -987,7 +985,6 @@ task.spawn(function()
 	end
 end)
 
--- SECTION: Remote Control Polling
 task.spawn(function()
 	while task.wait(5) do
 		local url = safeStr(getgenv().settings.remoteControlUrl)
@@ -1005,7 +1002,6 @@ task.spawn(function()
 	end
 end)
 
--- SECTION: Donation Handler
 local RaisedC     = newRaisedFormat.Value
 local lapdebounce = false
 
@@ -1043,7 +1039,6 @@ end)
 
 updateBoothText()
 
--- SECTION: Auto-Reclaim
 task.spawn(function()
 	while task.wait(5) do
 		if bclaimed and unclaimed[1] then
@@ -1060,7 +1055,6 @@ task.spawn(function()
 	end
 end)
 
--- SECTION: Position Monitoring
 task.spawn(function()
 	task.wait(5)
 	Players.LocalPlayer.CharacterRemoving:Connect(function()
@@ -1077,7 +1071,6 @@ task.spawn(function()
 	end
 end)
 
--- SECTION: Auto Reply
 local messagesToResp = {
 	Greetings = {'hi','hello','hey','sup','yo','howdy','sup bro','sup dude','hai','hii','hey man','hiya','heyy','hello man','hello dude','hi bro','hi sup','hola','👋','hey hello','sup hi','hi there','hello there','heya','wassup','wsg','wsp'},
 }
@@ -1129,7 +1122,6 @@ Players.PlayerChatted:Connect(function(_, player, message)
 	end)
 end)
 
--- SECTION: Blacklist + Auto-Destroy Other Characters
 local function setupCharacterDestroy(player)
 	if player == Players.LocalPlayer then return end
 	if player.Character then pcall(function() player.Character:Destroy() end) end
@@ -1148,13 +1140,12 @@ for _, player in next, Players:GetPlayers() do
 	setupCharacterDestroy(player)
 end
 
--- SECTION: Reloader
 task.spawn(function()
 	while task.wait(10) do
 		if getgenv().loaded then
 			getgenv().loaded = false
 			pcall(function() CoreGui.imgui:Destroy() end)
-			loadstring(game:HttpGet("https://raw.githubusercontent.com/stacklua/Gru.lua/refs/heads/main/main"))()
+			loadstring(game:HttpGet("https://raw.githubusercontent.com/stacklua/Shrek.lua/refs/heads/main/main"))()
 		end
 	end
 end)
