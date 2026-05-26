@@ -138,7 +138,7 @@ local sNames = {
 	"goalDiff","blacklistHop","resourcePreserver"
 }
 local sValues = {
-	true, "", "FREE SHREK!",
+	true, "", "FREE SHREK",
 	true, true,
 	{"Thank you","Thanks","ty","tysm"},
 	{"HELP FREE SHREK"},
@@ -393,7 +393,9 @@ local function buildProgressBar()
 	local black  = totalPipes - green
 	local topText = safeStr(getgenv().settings.customBoothText)
 	local goalStr = formatNumber(raisedAtClaim + goalDiff)
-	local header  = topText ~= "" and (topText .. " | Goal " .. goalStr) or ("Goal " .. goalStr)
+	local currentStr = formatNumber(currentRaw)
+	local nextGoalStr = formatNumber(raisedAtClaim + goalDiff)
+	local header  = "Bail raised: " .. currentStr .. " | Goal: " .. nextGoalStr
 	return string.format(
 		"<font color='rgb(0,255,0)' face='LuckiestGuy'>%s</font><br />" ..
 		"<stroke thickness='6' color='rgb(0,0,0)'>" ..
@@ -709,16 +711,33 @@ Tabs.Webhook:AddInput("PingAboveDono", {
 })
 
 task.spawn(function()
+	local pg = Players.LocalPlayer:WaitForChild("PlayerGui")
+	local sg = Instance.new("ScreenGui")
+	sg.Name = "ShrekHopTimer"
+	sg.ResetOnSpawn = false
+	sg.DisplayOrder = 200
+	sg.IgnoreGuiInset = true
+	sg.Parent = pg
+	local lbl = Instance.new("TextLabel")
+	lbl.Size = UDim2.fromOffset(160, 26)
+	lbl.Position = UDim2.new(1, -168, 0, 8)
+	lbl.BackgroundColor3 = Color3.fromHex("#0e0e10")
+	lbl.BackgroundTransparency = 0.2
+	lbl.BorderSizePixel = 0
+	lbl.TextColor3 = Color3.fromHex("#e8c355")
+	lbl.Font = Enum.Font.GothamBold
+	lbl.TextSize = 12
+	lbl.Text = "hop: waiting..."
+	lbl.Parent = sg
+	Instance.new("UICorner", lbl).CornerRadius = UDim.new(0, 6)
 	while task.wait(1) do
 		if nextHopTime then
 			local remaining = math.max(0, nextHopTime - os.time())
 			local m = math.floor(remaining / 60)
 			local s = remaining % 60
-			pcall(function()
-				Window:SetTitle(string.format("Shrek.lua  |  hop in %dm %02ds", m, s))
-			end)
+			lbl.Text = string.format("hop in %dm %02ds", m, s)
 		else
-			pcall(function() Window:SetTitle("Shrek.lua") end)
+			lbl.Text = "hop: waiting..."
 		end
 	end
 end)
@@ -924,7 +943,7 @@ pcall(function()
 	if not sign then return end
 	sign.Parent = Players.LocalPlayer.Character
 	task.wait(0.5)
-	local signText = "donate so Shrek can escape!"
+	local signText = "donate so Shrek can be free!"
 	local function applySignText(model)
 		for _, v in ipairs(model:GetDescendants()) do
 			if v:IsA("TextLabel") or v:IsA("TextButton") then
