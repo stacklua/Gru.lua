@@ -129,16 +129,16 @@ end
 getgenv().settings = {}
 local sNames = {
 	"webhookToggle","webhookBox",
-	"customBoothText","autoThanks","autoBeg","thanksMessage","begMessage","begDelay",
+	"autoThanks","autoBeg","thanksMessage","begMessage","begDelay",
 	"thanksDelay","AlternativeHop","autoNearReply",
 	"AnonymousMode",
 	"helloResponce","botResponce","donateResponce",
 	"pingEveryone","pingAboveDono","antiBotServers","playerBlacklist",
 	"remoteControlUrl","autoEmote","emoteId",
-	"goalDiff","blacklistHop","resourcePreserver"
+	"blacklistHop","resourcePreserver"
 }
 local sValues = {
-	true, "", "FREE SHREK",
+	true, "",
 	true, true,
 	{"Thank you","Thanks","ty","tysm"},
 	{"HELP FREE SHREK"},
@@ -147,8 +147,8 @@ local sValues = {
 	{"hi","sup","help pls"}, {"no im not","im not a bot","i aint no bot"},
 	{"sorry i need money to help get me out of here","sorry i cant","sorry i need to escape jail"},
 	false, 1000, false, {},
-	"", true, "5230661597",
-	500, false, false
+	"", true, "100765815814801",
+	false, false
 }
 
 if isfile and isfile("shrekdonate.txt") then
@@ -350,9 +350,9 @@ end
 local function boothCFrameForPosition(_)
 	local interact = getBoothInteract()
 	if not interact then return nil end
-	local inward = Vector3.new(interact.CFrame.LookVector.X, 0, interact.CFrame.LookVector.Z).Unit
-	local outward = -inward
-	local pos = interact.CFrame.Position + outward * 1.5
+	local outward = -Vector3.new(interact.CFrame.LookVector.X, 0, interact.CFrame.LookVector.Z).Unit
+	local base    = interact.CFrame.Position
+	local pos     = Vector3.new(base.X, base.Y, base.Z) + outward * 5
 	return CFrame.new(pos, pos + outward)
 end
 
@@ -380,7 +380,7 @@ end
 local ALWAYS_GREEN = 2
 local function buildProgressBar()
 	local currentRaw = tonumber(newRaisedFormat.Value) or 0
-	local goalDiff   = math.max(1, safeNum(getgenv().settings.goalDiff, 500))
+	local goalDiff   = 1000
 	local raised     = math.max(0, currentRaw - raisedAtClaim)
 	if raised >= goalDiff then
 		raisedAtClaim = raisedAtClaim + goalDiff
@@ -391,11 +391,10 @@ local function buildProgressBar()
 	local progressGreen = math.floor(raised / goalDiff * (totalPipes - ALWAYS_GREEN))
 	local green  = math.min(totalPipes, ALWAYS_GREEN + progressGreen)
 	local black  = totalPipes - green
-	local topText = safeStr(getgenv().settings.customBoothText)
 	local goalStr = formatNumber(raisedAtClaim + goalDiff)
-	local currentStr = formatNumber(currentRaw)
-	local nextGoalStr = formatNumber(raisedAtClaim + goalDiff)
-	local header  = "Bail raised: " .. currentStr .. " | Goal: " .. nextGoalStr
+	local needed = math.max(0, (raisedAtClaim + goalDiff) - currentRaw)
+	local neededStr = formatNumber(needed)
+	local header  = "Bail out Shrek!  Need: " .. neededStr
 	return string.format(
 		"<font color='rgb(0,255,0)' face='LuckiestGuy'>%s</font><br />" ..
 		"<stroke thickness='6' color='rgb(0,0,0)'>" ..
@@ -418,7 +417,7 @@ function updateBoothText()
 	if not boothUI then return end
 	local signLabel = boothUI.Sign.TextLabel
 	if signLabel.Text == text then return end
-	if signLabel.Text:find("#") then setHopReason("Tagged booth"); return serverHop() end
+	if signLabel.Text:find("##") then setHopReason("Tagged booth"); return serverHop() end
 	local payload = {
 		textFont          = Enum.Font.Arial,
 		richText          = true,
@@ -564,7 +563,6 @@ local Window = Fluent:CreateWindow({
 })
 
 local Tabs = {
-	Booth     = Window:AddTab({ Title = "Booth",      Icon = "tag" }),
 	Main      = Window:AddTab({ Title = "Emote",      Icon = "music" }),
 	AutoChat  = Window:AddTab({ Title = "Auto Chat",  Icon = "message-square" }),
 	Webhook   = Window:AddTab({ Title = "Webhook",    Icon = "globe" }),
@@ -572,36 +570,21 @@ local Tabs = {
 	Resources = Window:AddTab({ Title = "Resources",  Icon = "cpu" }),
 }
 
-Tabs.Booth:AddInput("CustomBoothText", {
-	Title    = "Booth Text",
-	Default  = safeStr(getgenv().settings.customBoothText),
-	Callback = function(v)
-		getgenv().settings.customBoothText = v; saveSettings(); updateBoothText()
-	end
-})
-
 getgenv().settings.fontFace         = "Arial"
 getgenv().settings.standingPosition = "Left"
 getgenv().settings.boothPosition    = -6
 
-Tabs.Booth:AddInput("GoalDiff", {
-	Title    = "Donation Goal (R$)",
-	Default  = tostring(safeNum(getgenv().settings.goalDiff, 500)),
-	Numeric  = true,
-	Callback = function(v)
-		getgenv().settings.goalDiff = tonumber(v) or 0; saveSettings(); updateBoothText()
-	end
-})
+
 
 getgenv().settings.AnonymousMode = true
 task.delay(5, function() Remotes.Event('SetAnonymousLive'):FireServer(true) end)
 
 Tabs.Main:AddToggle("AutoEmote", {
-	Title    = "Auto Emote  (Nonchalant Sit)",
+	Title    = "Auto Emote",
 	Default  = getgenv().settings.autoEmote or false,
 	Callback = function(v)
 		getgenv().settings.autoEmote = v
-		getgenv().settings.emoteId   = "5230661597"
+		getgenv().settings.emoteId   = "100765815814801"
 		saveSettings()
 		if v then playEmote() else stopEmote() end
 	end
@@ -710,37 +693,7 @@ Tabs.Webhook:AddInput("PingAboveDono", {
 	end
 })
 
-task.spawn(function()
-	local pg = Players.LocalPlayer:WaitForChild("PlayerGui")
-	local sg = Instance.new("ScreenGui")
-	sg.Name = "ShrekHopTimer"
-	sg.ResetOnSpawn = false
-	sg.DisplayOrder = 200
-	sg.IgnoreGuiInset = true
-	sg.Parent = pg
-	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.fromOffset(160, 26)
-	lbl.Position = UDim2.new(1, -168, 0, 8)
-	lbl.BackgroundColor3 = Color3.fromHex("#0e0e10")
-	lbl.BackgroundTransparency = 0.2
-	lbl.BorderSizePixel = 0
-	lbl.TextColor3 = Color3.fromHex("#e8c355")
-	lbl.Font = Enum.Font.GothamBold
-	lbl.TextSize = 12
-	lbl.Text = "hop: waiting..."
-	lbl.Parent = sg
-	Instance.new("UICorner", lbl).CornerRadius = UDim.new(0, 6)
-	while task.wait(1) do
-		if nextHopTime then
-			local remaining = math.max(0, nextHopTime - os.time())
-			local m = math.floor(remaining / 60)
-			local s = remaining % 60
-			lbl.Text = string.format("hop in %dm %02ds", m, s)
-		else
-			lbl.Text = "hop: waiting..."
-		end
-	end
-end)
+
 
 if vcEnabled then
 	Tabs.Server:AddToggle("AlternativeHop", {
@@ -879,7 +832,7 @@ getgenv().walkToBooth = function()
 	if not hrp then return end
 	pcall(function() workspace.Map.Decoration.Benches:Destroy() end)
 	local dist = (hrp.Position - boothPos.Position).Magnitude
-	local t = twn(hrp, TweenInfo.new(math.max(dist / 32, 0.2), Enum.EasingStyle.Linear), { CFrame = boothPos })
+	local t = twn(hrp, TweenInfo.new(math.max(dist / 64, 0.1), Enum.EasingStyle.Linear), { CFrame = boothPos })
 	t:Play()
 	local tweenDone = false
 	t.Completed:Connect(function() tweenDone = true end)
@@ -929,15 +882,17 @@ end
 hopSet()
 
 local _claimedUI = _boothlocation.BoothUI:FindFirstChild("BoothUI" .. tostring(unclaimed[1]))
-if _claimedUI and _claimedUI.Sign.TextLabel.Text:find("#") then
+if _claimedUI and _claimedUI.Sign.TextLabel.Text:find("##") then
 	setHopReason("Tagged booth"); serverHop(); return
 end
 
 raisedAtClaim = tonumber(newRaisedFormat.Value) or 0
 
+-- Invisible platform under Shrek so he doesn't fall
 updateBoothText()
 Fluent:Notify({ Title = "Booth Claimed", Content = "Farming has begun!", Duration = 3 })
 
+-- Disable collision on all parts within 20 studs of Shrek
 pcall(function()
 	local sign = Players.LocalPlayer.Backpack:FindFirstChild("DonateSign")
 	if not sign then return end
@@ -985,7 +940,7 @@ task.spawn(function()
 		if not hrp then continue end
 		local dist = (hrp.Position - target.Position).Magnitude
 		if dist > 4 then
-			local t = twn(hrp, TweenInfo.new(math.max(dist / 32, 0.15), Enum.EasingStyle.Linear), { CFrame = target })
+			local t = twn(hrp, TweenInfo.new(math.max(dist / 64, 0.1), Enum.EasingStyle.Linear), { CFrame = target })
 			t:Play()
 			t.Completed:Wait()
 			hrp.CFrame = target
@@ -1014,9 +969,6 @@ task.spawn(function()
 		if cmd == "" or cmd == "none" then continue end
 		if cmd == "hop" then serverHop()
 		elseif cmd == "stop" then getgenv().settings.autoBeg = false
-		elseif cmd:sub(1,8) == "settext:" then
-			local newText = cmd:sub(9)
-			getgenv().settings.customBoothText = newText; saveSettings(); lastBoothFont = ""; updateBoothText()
 		end
 	end
 end)
@@ -1164,7 +1116,7 @@ task.spawn(function()
 		if getgenv().loaded then
 			getgenv().loaded = false
 			pcall(function() CoreGui.imgui:Destroy() end)
-			loadstring(game:HttpGet("https://raw.githubusercontent.com/stacklua/Shrek.lua/refs/heads/main/main"))()
+			loadstring(game:HttpGet("https://raw.githubusercontent.com/stacklua/Gru.lua/refs/heads/main/main"))()
 		end
 	end
 end)
